@@ -23,13 +23,21 @@ AnnoMining is an integrated computational platform designed for comprehensive an
 The platform is particularly valuable for researchers working with plant genomes, microbial genomes, or any organism where secondary metabolite production is of interest for drug discovery, natural product research, or metabolic engineering.
 
 Key Features
+
 •	Secondary Metabolism Mapping: Identifies genes involved in known secondary metabolite pathways (terpenoids, phenylpropanoids, alkaloids, glucosinolates, cannabinoids, and xanthines)
+
 •	Pharmaceutical Potential Scoring: Ranks genes by their predicted pharmaceutical and nutraceutical relevance using a multi-criteria weighted system
+
 •	Score-Based Heatmaps: Visualizes gene-pathway associations with continuous color gradients reflecting pharmaceutical potential scores
+
 •	Multi-Genome Comparison: Enables comparative analysis across multiple species or strains with pathway score matrices
+
 •	Pathway Completeness Analysis: Evaluates the completeness of each metabolic pathway based on gene counts and pharmaceutical scores
+
 •	Publication-Ready Visualizations: Generates high-resolution figures with legends positioned outside plots to prevent overlap
+
 •	Interactive GUI: User-friendly interface for researchers without command-line expertise
+
 •	Batch Processing: Command-line mode for high-throughput analysis
 
 ________________________________________
