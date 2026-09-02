@@ -55,7 +55,7 @@ tkinter (typically included with Python)
 Installation
 Option 1: From GitHub
 bash
-git clone https://github.com/yourusername/annomining.git
+git clone https://github.com/valdirstefenon/annoMining.git
 cd annomining
 pip install -r requirements.txt
 python annomining.py
