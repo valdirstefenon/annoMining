@@ -156,37 +156,61 @@ ________________________________________
  
 Input File Formats
 1. eggNOG-mapper Output
+   
 AnnoMining accepts the standard eggNOG-mapper annotation file format (.emapper.annotations).
+
 Expected Format:
-text
+
 #query_name    seed_ortholog    e-value    score    eggNOG_OG    max_annot_lvl    COG_category    Description    Preferred_name    GOs    ECs    KEGG_ko    KEGG_Pathway    KEGG_Module    ...
+
 gene1    XXX   1e-150   100    OG5_123456    1    S    hypothetical protein    -    GO:0001234   3.4.11.1    K00001    map00900    M00001
+
 gene2    YYY   1e-140   95    OG5_234567    1    C    kinase    -    GO:0005678   2.7.1.1    K00002    map00901    M00002
+
 Critical Columns:
+
 •	Column 1: Gene/query identifier
+
 •	Column 8: COG category (optional)
+
 •	Column 10: Gene Ontology (GO) terms
+
 •	Column 11: EC numbers
+
 •	Column 12: KEGG Orthologs (KO) numbers
+
 •	Column 13: KEGG pathway identifiers (mapXXXXX)
+
 The parser is flexible and can extract KEGG information from multiple column formats (including ko:KXXXXX or just KXXXXX).
 
-2. InterProScan Output (Optional)
+
+3. InterProScan Output (Optional)
+
 InterProScan TSV format files can be provided for additional domain and GO term information.
+
 Expected Format (InterProScan TSV):
-text
+
 #protein_acc    md5    length    analysis    signature_acc    signature_desc    start    end    score    status    date    interpro_acc    interpro_desc    ...
+
 gene1    ABC123    456    Pfam    PF00195    ABC transporter    1    200    45.6    T    2024-01-01    IPR001234    ABC transporter domain
+
 Key Fields Used:
+
 •	Column 1: Gene identifier
+
 •	Column 5: Domain signature (PFAM)
+
 •	Column 12: InterPro domain
+
 Note: InterProScan file is optional but enhances predictions through additional PFAM domain data.
 ________________________________________
  
 Analysis Modules
+
 5.1 Secondary Metabolism Analysis
+
 Purpose: Identify and characterize genes involved in secondary metabolite biosynthesis.
+
 Workflow:
 1.	Parse eggNOG and InterProScan files
 2.	Extract KEGG pathways, KO numbers, EC numbers, GO terms, and PFAM domains
