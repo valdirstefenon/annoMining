@@ -114,22 +114,38 @@ Overview of Methodology
 AnnoMining operates through a multi-step workflow that transforms raw functional annotations into prioritized lists of pharmaceutically relevant genes.
 
 Core Workflow
-text
+
 Input Files
+
     ↓
+
 [Parser] - Extracts KOs, ECs, GO, PFAM, Pathways
+
     ↓
+
 [Integration] - Merges eggNOG and InterProScan data
+    
     ↓
+
 [Pathway Mapping] - Maps genes to secondary metabolic pathways
+    
     ↓
+
 [Scoring] - Calculates pharmaceutical potential scores
+    
     ↓
+
 [Validation] - Validates group exclusivity (HIGH/MEDIUM/LOW)
+    
     ↓
+
 [Visualization] - Generates heatmaps, networks, rankings, completeness analysis
+
     ↓
+
 Output Files
+
+
 
 Conceptual Framework
 1.	Secondary Metabolism Classification: Genes are classified into seven major classes:
