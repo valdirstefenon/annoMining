@@ -1,622 +1,762 @@
-annoMining
-Version 2.2
-________________________________________
+AnnoMining v3.6 User Manual
+A Comprehensive Tool for Secondary Metabolism, Pharmaceutical Potential, and Disease Resistance Analysis in Plant Genomes
+Version 3.6 | September 2026
+
 Table of Contents
-1.	Introduction
-2.	Installation and Requirements
-3.	Overview of Methodology
-4.	Input File Formats
-5.	Analysis Modules
-o	5.1 Secondary Metabolism Analysis
-o	5.2 Pharmaceutical & Nutraceutical Analysis
-o	5.3 Multi-Genome Comparative Analysis
-o	5.4 eggNOG to KEGG Converter
-6.	Output Files and Interpretation
-7.	Data Sources and Reference Databases
-8.	Scoring and Ranking Criteria
-9.	Troubleshooting
-10.	Citation
-________________________________________
- 
-Introduction
-AnnoMining is an integrated computational platform designed for comprehensive analysis of secondary metabolism genes from genomic annotations. The software leverages functional annotation data from eggNOG-mapper and InterProScan to identify, classify, and prioritize genes involved in the biosynthesis of secondary metabolites with pharmaceutical and nutraceutical potential.
-The platform is particularly valuable for researchers working with plant genomes, microbial genomes, or any organism where secondary metabolite production is of interest for drug discovery, natural product research, or metabolic engineering.
+Overview
 
-Key Features
+What AnnoMining Does
 
-•	Secondary Metabolism Mapping: Identifies genes involved in known secondary metabolite pathways (terpenoids, phenylpropanoids, alkaloids, glucosinolates, cannabinoids, and xanthines)
+New in Version 3.6
 
-•	Pharmaceutical Potential Scoring: Ranks genes by their predicted pharmaceutical and nutraceutical relevance using a multi-criteria weighted system
-
-•	Score-Based Heatmaps: Visualizes gene-pathway associations with continuous color gradients reflecting pharmaceutical potential scores
-
-•	Multi-Genome Comparison: Enables comparative analysis across multiple species or strains with pathway score matrices
-
-•	Pathway Completeness Analysis: Evaluates the completeness of each metabolic pathway based on gene counts and pharmaceutical scores
-
-•	Publication-Ready Visualizations: Generates high-resolution figures with legends positioned outside plots to prevent overlap
-
-•	Interactive GUI: User-friendly interface for researchers without command-line expertise
-
-•	Batch Processing: Command-line mode for high-throughput analysis
-
-________________________________________
- 
-Installation and Requirements
+Pipeline Workflow
 
 System Requirements
 
-•	Operating System: Linux, macOS, or Windows (with Python 3.8+)
-
-•	Memory: 4GB RAM minimum (8GB+ recommended for large genomes)
-
-•	Disk Space: 1GB for software + space for output files
-
-
-Dependencies
-
-AnnoMining requires the following Python packages:
-
-
-python >= 3.8
-
-pandas >= 1.3.0
-
-numpy >= 1.21.0
-
-matplotlib >= 3.4.0
-
-seaborn >= 0.11.0
-
-scipy >= 1.7.0
-
-statsmodels >= 0.12.0
-
-tkinter (typically included with Python)
-
-
-Installation
-
-Option 1: From GitHub
-
-bash
-
-git clone https://github.com/valdirstefenon/annoMining.git
-
-cd annomining
-
-pip install -r requirements.txt
-
-python annomining.py
-
-
-Option 2: Direct Download
-
-Download the annomining.py file and run with Python:
-
-bash
-
-python annomining.py
-
-
-
-Verifying Installation
-
-To verify that all dependencies are correctly installed, run:
-
-bash
-
-python -c "import pandas, numpy, matplotlib, seaborn, scipy, statsmodels; print('All dependencies OK')"
-
-________________________________________
- 
-Overview of Methodology
-AnnoMining operates through a multi-step workflow that transforms raw functional annotations into prioritized lists of pharmaceutically relevant genes.
-
-Core Workflow
+Installation Guide
 
 Input Files
 
-    ↓
-
-[Parser] - Extracts KOs, ECs, GO, PFAM, Pathways
-
-    ↓
-
-[Integration] - Merges eggNOG and InterProScan data
-    
-    ↓
-
-[Pathway Mapping] - Maps genes to secondary metabolic pathways
-    
-    ↓
-
-[Scoring] - Calculates pharmaceutical potential scores
-    
-    ↓
-
-[Validation] - Validates group exclusivity (HIGH/MEDIUM/LOW)
-    
-    ↓
-
-[Visualization] - Generates heatmaps, networks, rankings, completeness analysis
-
-    ↓
-
 Output Files
 
+Using the Graphical Interface
 
-
-Conceptual Framework
-
-1.	Secondary Metabolism Classification: Genes are classified into seven major classes:
-
-o	Terpenoids (isoprenoid-based compounds)
-
-o	Phenylpropanoids (aromatic amino acid derivatives)
-
-o	Alkaloids (nitrogen-containing compounds)
-
-o	Glucosinolates (sulfur-containing compounds)
-
-o	Xanthines (purine alkaloids)
-
-o	Cannabinoids (terpenophenolic compounds)
-
-o	Other (miscellaneous secondary metabolites)
-
-
-2.	Pharmaceutical Potential Assessment: Each gene is scored based on:
-
-o	Presence in known pharmaceutical pathways (2 points per pathway)
-
-o	Association with pharmaceutically relevant KOs (3 points per KO)
-
-o	Co-occurrence with core PFAM domains (2 points per domain)
-
-o	Classification into HIGH (≥10), MEDIUM (5-9), LOW (1-4), or NONE (0)
-
-
-3.	Comparative Analysis: Multiple genomes are compared using:
-
-o	Average pharmaceutical scores per pathway
-
-o	Compound class diversity metrics
-
-o	Pathway completeness indices
-
-o	Network-based similarity metrics
-
-
-4.	PFAM Enrichment Analysis: Compares HIGH+MEDIUM genes against LOW+NONE background to identify significantly enriched domains
-
-
-5.	Pathway Completeness Analysis: Evaluates each pathway's gene count and pharmaceutical score distribution
-________________________________________
- 
-Input File Formats
-
-1. eggNOG-mapper Output
-   
-
-AnnoMining accepts the standard eggNOG-mapper annotation file format (.emapper.annotations).
-
-
-Expected Format:
-
-#query_name    seed_ortholog    e-value    score    eggNOG_OG    max_annot_lvl    COG_category    Description    Preferred_name    GOs    ECs    KEGG_ko    KEGG_Pathway    KEGG_Module    ...
-
-gene1    XXX   1e-150   100    OG5_123456    1    S    hypothetical protein    -    GO:0001234   3.4.11.1    K00001    map00900    M00001
-
-gene2    YYY   1e-140   95    OG5_234567    1    C    kinase    -    GO:0005678   2.7.1.1    K00002    map00901    M00002
-
-Critical Columns:
-
-•	Column 1: Gene/query identifier
-
-•	Column 8: COG category (optional)
-
-•	Column 10: Gene Ontology (GO) terms
-
-•	Column 11: EC numbers
-
-•	Column 12: KEGG Orthologs (KO) numbers
-
-•	Column 13: KEGG pathway identifiers (mapXXXXX)
-
-The parser is flexible and can extract KEGG information from multiple column formats (including ko:KXXXXX or just KXXXXX).
-
-
-3. InterProScan Output (Optional)
-
-InterProScan TSV format files can be provided for additional domain and GO term information.
-
-Expected Format (InterProScan TSV):
-
-#protein_acc    md5    length    analysis    signature_acc    signature_desc    start    end    score    status    date    interpro_acc    interpro_desc    ...
-
-gene1    ABC123    456    Pfam    PF00195    ABC transporter    1    200    45.6    T    2024-01-01    IPR001234    ABC transporter domain
-
-Key Fields Used:
-
-•	Column 1: Gene identifier
-
-•	Column 5: Domain signature (PFAM)
-
-•	Column 12: InterPro domain
-
-Note: InterProScan file is optional but enhances predictions through additional PFAM domain data.
-________________________________________
- 
-Analysis Modules
-
-5.1 Secondary Metabolism Analysis
-
-Purpose: Identify and characterize genes involved in secondary metabolite biosynthesis.
-
-Workflow:
-1.	Parse eggNOG and InterProScan files
-2.	Extract KEGG pathways, KO numbers, EC numbers, GO terms, and PFAM domains
-3.	Map genes to secondary metabolism pathways (see SECONDARY_PATHWAYS dictionary)
-4.	Classify genes into metabolite classes
-5.	Calculate pharmaceutical potential scores for all secondary metabolism genes
-6.	Validate group exclusivity (HIGH, MEDIUM, LOW)
-7.	Generate comprehensive visualizations and tables
-8.	Perform pathway completeness analysis
-9.	Generate PFAM enrichment dotplots (combined HIGH+MEDIUM vs LOW+NONE)
-Configuration Parameters:
-Parameter	Description	Default
-eggNOG file	eggNOG annotations file	Required
-InterPro file	InterProScan TSV file (optional)	None
-Output folder	Directory for output files	secondary_metabolism
-
-
-
-Outputs Generated:
-File	Description
-secondary_heatmap_scores.pdf/png	Gene-pathway heatmap with pharma scores (white→red gradient)
-secondary_pharma_heatmap_scores.pdf/png	Pharmaceutical pathway heatmap with scores
-secondary_ko_dotplot.pdf/png	Top KOs by metabolite class
-secondary_top_kos_by_class.pdf/png	Most abundant KOs by class
-secondary_pathway_completeness.pdf/png	Distribution of genes across pathways
-secondary_class_distribution.pdf/png	Pie/donut charts (legend outside plot)
-secondary_upset_venn.pdf/png	Gene overlap between metabolite classes
-secondary_top_ec_numbers.pdf/png	Most frequent EC numbers
-secondary_top_core_pfam_domains.pdf/png	Most frequent PFAM domains
-secondary_combined_high_medium_pfam_dotplot.pdf/png	PFAM enrichment: HIGH+MEDIUM vs LOW+NONE
-secondary_pathway_completeness_analysis.csv	Detailed pathway completeness data
-secondary_secondary_genes_table.csv/xlsx	Detailed gene-level data table
-secondary_statistics.txt	Summary statistics including pharmaceutical subset
-________________________________________
- 
-5.2 Pharmaceutical & Nutraceutical Analysis
-Purpose: Identify and rank genes with pharmaceutical and nutraceutical potential using a multi-criteria scoring system.
-Workflow:
-1.	Parse and integrate annotation data
-2.	Map to pharmaceutical-relevant pathways (see PHARMA_DETAILS)
-3.	Score genes using weighted criteria (pathways ×2, KOs ×3, PFAM domains ×2)
-4.	Classify genes as HIGH, MEDIUM, LOW, or NONE potential
-5.	Validate group exclusivity with automatic correction
-6.	Generate prioritization visualizations and tables
-7.	Predict compound classes based on domain composition
-8.	Perform functional network analysis
-9.	Perform pathway completeness analysis
-10.	Generate PFAM enrichment dotplots
-
-Configuration Parameters:
-Parameter	Description	Default
-eggNOG file	eggNOG annotations file	Required
-InterPro file	InterProScan TSV file (optional)	None
-Threshold	Minimum score for pharmaceutical potential	5
-Network nodes	Number of genes in functional network	15
-Network method	Node selection method	enrichment
-Output folder	Directory for output files	pharma_analysis
-Network Methods:
-•	score: Selects top genes by pharmaceutical score
-•	enrichment: Selects genes based on combined importance metrics (score×2 + KOs×3 + pathways + PFAMs×0.5)
-•	balanced: Samples from multiple compound classes
-Outputs Generated:
-File	Description
-pharma_heatmap_scores.pdf/png	Gene-pathway heatmap with pharma scores (white→red gradient)
-pharma_pharma_heatmap_scores.pdf/png	Pharmaceutical pathway heatmap with scores
-pharma_score_ranking.pdf/png	Top-ranked genes by pharmaceutical potential
-pharma_compound_class_distribution.pdf/png	Distribution of bioactive compound classes
-pharma_pharmaceutical_uses.pdf/png	Predicted pharmaceutical applications
-pharma_donut_potential.pdf/png	Distribution of potential levels
-pharma_combined_high_medium_pfam_dotplot.pdf/png	PFAM enrichment: HIGH+MEDIUM vs LOW+NONE
-pharma_functional_network.pdf/png	Functional interaction network
-pharma_compound_predictions.pdf/png	Predicted compound-producing genes
-pharma_pathway_completeness_analysis.csv	Detailed pathway completeness data
-pharma_genes_table.csv/xlsx	Detailed gene-level pharmaceutical data
-pharma_statistics.txt	Summary pharmaceutical statistics with consistency checks
-pharma_compound_predictions.csv	Compound class predictions
-pharma_combined_pfam_enrichment.csv	PFAM enrichment analysis results
-pharma_combined_pfam_category_summary.csv	PFAM enrichment summary by category
-pharma_functional_network.csv	Network edge data
-________________________________________
-5.3 Multi-Genome Comparative Analysis
-Purpose: Compare pharmaceutical potential across multiple genomes or strains.
-Workflow:
-1.	Process each genome independently using the pharma analysis pipeline
-2.	Validate group exclusivity for each genome
-3.	Generate comparative statistics for each species
-4.	Create multi-species visualizations with score-based matrices
-5.	Build species similarity networks
-6.	Rank species by pharmaceutical potential metrics
-Configuration Parameters:
-Parameter	Description	Default
-eggNOG files	Comma-separated eggNOG files	Required
-InterPro files	Comma-separated InterPro files (optional)	None
-Species names	Comma-separated species labels	Required
-Threshold	Pharmaceutical score threshold	5
-Output folder	Directory for output files	pharma_multi_analysis
-Input Requirements:
-•	All files must be in the same order (file 1 corresponds to species 1, etc.)
-•	Species names should be provided in the same order
-•	InterPro files can be omitted (use empty string: ,,,)
-Outputs Generated:
-File	Description
-multi_comparative_summary.csv/xlsx	Cross-species summary statistics
-multi_pathway_score_matrix.pdf/png	Heatmap of pathway scores (white→red gradient)
-multi_comparative_bars.pdf/png	Stacked bar chart of potential levels
-multi_comparative_radar.pdf/png	Multi-dimensional species comparison
-multi_class_score_heatmap.pdf/png	Average scores by compound class (white→red)
-multi_species_network.pdf/png	Species similarity network
-multi_rankings.pdf/png	Species ranking by various metrics
-multi_ranking.csv	Ranking data table
-multi_comparative_combined_pfam_dotplot.pdf/png	Comparative PFAM enrichment
-multi_comparative_report.txt	Comprehensive comparative report
-________________________________________
-5.4 eggNOG to KEGG Converter
-Purpose: Extract KEGG Ortholog (KO) numbers from eggNOG annotations for use with KEGG Mapper tools.
-Workflow:
-1.	Parse eggNOG annotation file
-2.	Extract KO numbers from the KEGG_ko column
-3.	Generate a simple two-column format: gene → KO
-Input/Output:
-•	Input: eggNOG .emapper.annotations file
-•	Output: Tab-delimited file with gene IDs and KO numbers
-Output Format:
-text
-gene1    K00001
-gene1    K00002
-gene2    K00003
-Usage Example: This converted file can be used directly with the KEGG Mapper online tool for pathway enrichment analysis.
-________________________________________
-Output Files and Interpretation
-Score-Based Heatmaps (NEW in v2.2)
-Gene-Pathway Association Heatmaps with Scores:
-•	Rows represent genes with their pharmaceutical score in parentheses
-•	Columns represent pathways
-•	White-to-red gradient: white = low score, red = high score
-•	Intensity reflects quantitative pharmaceutical potential, not just presence/absence
-•	More informative than binary matrices for identifying high-potential gene-pathway associations
-•	Legends positioned outside the plot to prevent overlap
-PFAM Enrichment Analysis (NEW in v2.2)
-Combined HIGH+MEDIUM vs LOW+NONE:
-•	Compares all genes with pharmaceutical potential (HIGH+MEDIUM) against those without (LOW+NONE)
-•	Eliminates duplicate PFAM entries that appeared in separate HIGH/MEDIUM analyses
-•	Identifies domains significantly enriched in pharmaceutically relevant genes
-•	Results sorted by fold enrichment
-•	Includes p-value adjustment (FDR) for multiple testing
-Visualization:
-•	Dotplot with fold enrichment on x-axis
-•	PFAM domains on y-axis
-•	Point size proportional to gene count
-•	Color-coded by pathway category (Flavonoids, Terpenoids, Alkaloids, etc.)
-•	Statistical significance indicated by p.adjust < 0.05
-Pathway Completeness Analysis (NEW in v2.2)
-For each secondary metabolism pathway, the analysis provides:
-•	Gene Count: Number of genes associated with the pathway
-•	Pharma Score Sum: Total pharmaceutical score across all genes in the pathway
-•	High/Medium Gene Count: Number of HIGH and MEDIUM potential genes
-•	Average Pharma Score: Mean pharmaceutical score per gene
-Output Files:
-•	*_pathway_completeness_analysis.csv: Complete data table
-•	*_pathway_completeness_analysis.pdf/png: Visualization of top pathways by gene count
-Score Rankings
-Pharmaceutical Score Ranking:
-•	Higher scores indicate greater pharmaceutical relevance
-•	Color coding:
-o	🟢 Green (HIGH): Score ≥ 10
-o	🟡 Yellow (MEDIUM): Score 5–9
-o	🔴 Red (LOW): Score 1–4
-•	Genes with score 0 are excluded from ranking
-Functional Networks
-Network Visualization:
-•	Nodes represent genes
-•	Node size reflects pharmaceutical score
-•	Edge thickness represents functional similarity
-•	Edge weight calculated from shared:
-o	Pathways (weight × 2)
-o	KOs (weight × 3)
-o	GO terms (weight × 1)
-Compound Predictions
-Prediction Confidence:
-•	Based on PFAM domain presence
-•	Classes predicted:
-o	Flavonoids: PF00195, PF02797, PF02458
-o	Terpenoids: PF03936, PF01397, PF00067
-o	Alkaloids: PF01596, PF00891, PF00248
-o	Phenylpropanoids: PF00195, PF00430
-o	Carotenoids: PF00514, PF06444
-•	Confidence score = (matched domains / required domains) × class confidence
-Comparative Reports
-Species Rankings:
-•	Percent_Pharma_of_Secondary: Percentage of secondary metabolism genes with pharmaceutical potential (more meaningful than percentage of total)
-•	Unique_Compound_Classes: Diversity of predicted compound classes
-•	Avg_Pharma_Score: Average score across pharma-relevant genes
-•	Best Performer identified based on highest percent of pharma genes relative to secondary metabolism
-________________________________________
-Data Sources and Reference Databases
-KEGG Pathways (Secondary Metabolism)
-AnnoMining includes a curated set of KEGG pathways relevant to secondary metabolism:
-Pathway	Class	Description
-map00900	Terpenoids	Terpenoid backbone biosynthesis
-map00902	Terpenoids	Monoterpenoid biosynthesis
-map00904	Terpenoids	Diterpenoid biosynthesis
-map00909	Terpenoids	Sesquiterpenoid/triterpenoid biosynthesis
-map00940	Phenylpropanoids	Phenylpropanoid biosynthesis
-map00941	Phenylpropanoids	Flavonoid biosynthesis
-map00950	Alkaloids	Isoquinoline alkaloid biosynthesis
-map00960	Alkaloids	Tropane/piperidine biosynthesis
-map00966	Glucosinolates	Glucosinolate biosynthesis
-map00232	Xanthines	Caffeine metabolism
-map00903	Cannabinoids	Cannabinoid biosynthesis
-Pharmaceutical Pathways
-Extended pathway set for pharmaceutical and nutraceutical applications:
-Pathway	Class	Bioactive Compounds	Applications
-map00950	Alkaloids	Morphine, codeine, berberine	Analgesic, antimicrobial
-map00909	Terpenoids	Artemisinin, taxol	Antimalarial, anticancer
-map00941	Flavonoids	Quercetin, catechins	Cardioprotective
-map00945	Stilbenoids	Resveratrol, curcumin	Chemopreventive
-map00966	Glucosinolates	Sulforaphane	Anticancer
-map00903	Cannabinoids	THC, CBD	Analgesic, anti-epileptic
-map00232	Xanthines	Caffeine	Stimulant
-Key KEGG Orthologs
-Important KOs for pharmaceutical biosynthesis:
-Category	KOs
-Bioactive flavonoids	K00660, K05275, K05276, K13065, K13066, K05265, K05266
-Anticancer terpenes	K15891, K15892, K15893, K00487, K00507, K00509
-Nutraceutical carotenoids	K00514, K00515, K06444, K06445, K06446, K06447, K06448, K06449, K06450, K06451
-Therapeutic alkaloids	K01799, K01800, K01900, K01901, K01902, K01903
-Core PFAM Domains
-Pharmaceutically relevant PFAM domains:
-Category	Domains
-Flavonoids	PF00195, PF02797, PF05834
-Terpenoids	PF01397, PF03936, PF00067, PF00494
-Alkaloids	PF01596, PF00891, PF00201, PF00155, PF00141
-Phenylpropanoids	PF00195, PF00141
-Carotenoids	PF00494, PF00514
-P450	PF00067
-Methyltransferases	PF01596, PF00891, PF01799
-________________________________________
-Scoring and Ranking Criteria
-Pharmaceutical Potential Score Calculation
-The pharmaceutical score for each gene is calculated as:
-text
-Score = (Pathway Contribution × 2) + (KO Contribution × 3) + Domain Bonus
-Pathway Contribution (×2 each):
-•	Gene associated with a pathway in PHARMA_DETAILS → +2
-•	Gene associated with multiple pharma pathways → cumulative
-KO Contribution (×3 each):
-•	Gene contains a KO listed in PHARMA_KOS → +3
-•	Multiple important KOs → cumulative
-Domain Bonus:
-•	Gene contains a PFAM domain in CORE_PHARMA_DOMAINS → +2 per domain
-•	Only non-generic domains (not in GENERIC_DOMAINS) are considered
-Potential Classification
-Category	Score Range	Color	Description
-HIGH	≥ 10	🟢	Strong pharmaceutical potential
-MEDIUM	5–9	🟡	Moderate pharmaceutical potential
-LOW	1–4	🔴	Limited pharmaceutical potential
-NONE	0	⚪	No detected pharmaceutical potential
-Group Exclusivity Validation
-AnnoMining automatically validates and corrects group assignments:
-•	Priority: HIGH > MEDIUM > LOW
-•	Genes found in multiple groups are reassigned to the highest priority group
-•	Validation report printed to console showing overlap statistics
-Gene Importance Metric (Network Analysis)
-For network node selection using the enrichment method:
-text
-Importance = (Pharma Score × 2) + (KO Count × 3) + (Pathway Count × 1) + (PFAM Count × 0.5)
-Species Comparison Metrics
-Similarity Score (Species Network):
-text
-Similarity = 1 / (1 + ΔHIGH × 0.5 + ΔPercent × 0.3 + ΔClasses × 0.2)
-Where:
-•	ΔHIGH = difference in HIGH-potential gene counts
-•	ΔPercent = difference in percentage of pharma genes relative to secondary metabolism
-•	ΔClasses = difference in compound class diversity
-PFAM Enrichment Statistics
-Enrichment analysis uses Fisher's exact test with FDR correction:
-•	Fold Enrichment: Frequency in group / Frequency in background
-•	p-value: Statistical significance from Fisher's exact test
-•	p.adjust: FDR-corrected p-value
-•	Significant: p.adjust < 0.05
-________________________________________
-Troubleshooting
-Common Issues
-1. Tkinter Not Available
-Error: ImportError: No module named tkinter
-Solution: Install tkinter:
-•	Ubuntu/Debian: sudo apt-get install python3-tk
-•	CentOS/RHEL: sudo yum install python3-tkinter
-•	macOS: Tkinter is typically included with Python.org installation
-•	Windows: Tkinter is included with standard Python installation
-2. File Format Issues
-Symptom: Parsing produces few or no results
-Solution:
-•	Verify eggNOG file is in the correct format (tab-delimited)
-•	Check that KEGG pathway columns contain mapXXXXX format
-•	Ensure file contains at least one headerless line with data
-•	Try the command-line converter first to verify extraction
-3. Memory Errors
-Symptom: Program crashes with memory errors on large genomes
-Solution:
-•	Close other applications to free RAM
-•	Run analysis in segments using command-line options
-•	Increase system swap space
-4. Missing Visualizations
-Symptom: Some plots are not generated
-Solution:
-•	These are skipped when insufficient data exists (e.g., <2 genes)
-•	Check that genes have associated pathways
-•	Verify that input files contain the required data
-•	Ensure at least 2 genes are present in the group being analyzed
-5. InterPro File Issues
-Symptom: InterPro data not appearing in outputs
-Solution:
-•	Verify file is in TSV format
-•	Check column 1 contains gene IDs matching eggNOG file
-•	Ensure PFAM domains are in PFXXXXX format
-•	GO terms should be in GO:XXXXXXX format
-6. Text Overlap in Figures
-Symptom: Text overlapping in class distribution plots
-Solution (automatic in v2.2):
-•	Legends are now positioned outside plots using bbox_to_anchor
-•	Figure sizes adjust dynamically based on the number of items
-•	Labels include counts to reduce crowding
-•	If issues persist, increase figure size by modifying figsize parameters
-7. Inconsistent Group Counts
-Symptom: Pharma genes > Secondary genes in statistics
-Solution (automatic in v2.2):
-•	The pipeline validates that pharmaceutical potential is a subset of secondary metabolism
-•	Automatic correction of group assignments with priority hierarchy
-•	Consistency checks printed to console
-•	If issues persist, verify that PHARMA_DETAILS is a subset of SECONDARY_PATHWAYS
 Command-Line Usage
-The GUI interface is the primary mode of operation, but the analysis functions can also be called from the command line:
-python
-# Secondary metabolism analysis
-from annomining import run_secondary_analysis
-run_secondary_analysis('eggnog.emapper.annotations', 'interpro.tsv', 'output_dir', 'prefix')
 
-# Pharmaceutical analysis
-from annomining import run_pharma_analysis
-run_pharma_analysis('eggnog.emapper.annotations', 'interpro.tsv', 'pharma_out', 'pharma', threshold=5)
+Understanding the Results
 
-# Multi-genome analysis
-from annomining import process_multiple_genomes
-process_multiple_genomes(['sp1.emapper', 'sp2.emapper'], ['sp1.tsv', 'sp2.tsv'], ['Species1', 'Species2'])
-Logging and Debugging
-All modules generate detailed console output including:
-•	Start time with timestamps
-•	Progress indicators
-•	Validation reports for group exclusivity
-•	Warning messages for missing data
-•	Error messages with stack traces
-•	Completion messages with output locations
-________________________________________
+Disease Resistance Analysis
+
+TNJ Gene Detection
+
+Troubleshooting
+
+Frequently Asked Questions
+
+Citation
+
+Overview
+AnnoMining is a Python-based pipeline designed to identify and characterize genes involved in secondary metabolism, pharmaceutical potential, and disease resistance from annotated plant genomes. Version 3.6 introduces comprehensive disease resistance analysis with specialized detection of TNJ (TIR-NBS-Jacalin) genes, a Myrtaceae-specific resistance gene family.
+
+The tool combines multiple evidence sources:
+
+KEGG pathway mapping from EggNOG annotations
+
+PFAM domain analysis from InterProScan
+
+HMMER profile searches against curated domain databases
+
+Multi-layer scoring for pharmaceutical and resistance potential
+
+This multi-layered strategy ensures maximum recovery of genes of interest, including those that are species-specific or poorly characterized in non-model plant species.
+
+What AnnoMining Does
+Core Functions
+Secondary Metabolism Gene Identification
+
+Detects genes associated with plant secondary metabolism pathways
+
+Covers: Terpenoids, Phenylpropanoids, Alkaloids, Glucosinolates, Cannabinoids, Xanthines
+
+Uses KEGG pathway mapping, PFAM domains, and HMMER searches
+
+Pharmaceutical Potential Assessment
+
+Assigns pharmaceutical potential scores (HIGH, MEDIUM, LOW, NONE)
+
+Predicts compound classes based on domain architecture
+
+Identifies genes with nutraceutical and therapeutic applications
+
+Disease Resistance Analysis ✨ NEW in v3.6
+
+Comprehensive detection of NLR (Nucleotide-binding Leucine-rich Repeat) genes
+
+TNJ gene detection (TIR-NBS-Jacalin) - Myrtaceae-specific resistance genes
+
+Resistance pathway mapping (plant-pathogen interaction, MAPK signaling, hormone signaling)
+
+Resistance class distribution and enrichment analysis
+
+Comprehensive Visualization
+
+Heatmaps of gene-pathway associations
+
+Dot plots of enriched PFAM domains
+
+Pathway completeness analysis
+
+Class distribution charts
+
+Functional networks of high-potential genes
+
+Resistance network visualization
+
+Compound predictions based on domain architecture
+
+Comparative Analysis
+
+Multi-genome comparisons for evolutionary studies
+
+Species ranking by pharmaceutical potential
+
+Pathway presence matrix across species
+
+New in Version 3.6
+Major Additions
+Feature	Description
+Disease Resistance Analysis	Complete new module for identifying and characterizing disease resistance genes
+TNJ Gene Detection	Specialized detection of TIR-NBS-Jacalin genes (Myrtaceae-specific)
+Resistance Scoring System	Multi-factor scoring for resistance potential (HIGH/MEDIUM/LOW)
+Resistance Pathway Mapping	Plant-pathogen interaction, MAPK signaling, hormone signaling
+NLR Classification	TIR-NLR, CC-NLR, TNL, TNJ, TNJ-like, NLR-Jacalin
+Resistance Network	Functional network visualization of resistance genes
+PFAM Enrichment for Resistance	Statistical enrichment of resistance-associated PFAM domains
+HMMER Integration	Full HMMER support for resistance domain detection
+Improvements
+Enhanced GFF/HMMER integration across all analysis modes
+
+Improved validation with mutual exclusivity checks for gene groups
+
+Extended pharmaceutical domain dictionary with more PFAMs
+
+Better error handling and logging
+
+Optimized memory usage for large genomes
+
+Pipeline Workflow
+text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              INPUT FILES                                    │
+├─────────────────┬─────────────────┬─────────────────┬───────────────────────┤
+│    EggNOG       │   InterProScan  │  GFF + Genome   │   HMM Profiles        │
+│  annotations    │   annotations   │     FASTA       │   Directory           │
+└────────┬────────┴────────┬────────┴────────┬────────┴──────────┬────────────┘
+         │                 │                 │                   │
+         ▼                 ▼                 ▼                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         MERGE ANNOTATION DATA                               │
+│  • Unify genes from all sources                                            │
+│  • Extract KEGG pathways, KOs, EC numbers, GO terms                        │
+│  • Collect PFAM domains                                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         HMMER PROFILE SEARCH                                │
+│  • Extract proteins from GFF using gffread                                 │
+│  • Search against curated HMM profiles                                     │
+│  • Identify genes with secondary, pharma, or resistance domains            │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    SECONDARY METABOLISM CLASSIFICATION                      │
+│  • Map KEGG pathways to secondary metabolism classes                       │
+│  • Classify genes by metabolite class                                      │
+│  • Integrate HMMER-detected genes                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      PHARMACEUTICAL SCORING                                │
+│  • Score genes based on pathway, KO, and PFAM evidence                    │
+│  • Assign HIGH/MEDIUM/LOW/NONE classification                              │
+│  • Predict compound classes                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    DISEASE RESISTANCE SCORING  ✨ NEW                      │
+│  • Detect NLR, TIR-NLR, CC-NLR, TNJ genes                                 │
+│  • Score based on resistance domains and pathways                         │
+│  • Classify resistance gene architectures                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    VISUALIZATION & REPORTING                                │
+│  • Generate publication-ready figures                                      │
+│  • Create summary tables (CSV, Excel)                                      │
+│  • Produce statistics reports                                              │
+│  • Build functional networks                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              OUTPUT FILES                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  • secondary_statistics.txt          • pharma_statistics.txt               │
+│  • secondary_genes_table.csv         • pharma_genes_table.csv              │
+│  • resistance_statistics.txt  ✨     • resistance_genes_table.csv ✨       │
+│  • *_combined_high_medium_pfam_dotplot.pdf                                 │
+│  • *_heatmap_scores.pdf              • *_pharma_heatmap_scores.pdf         │
+│  • functional_network.pdf            • resistance_network.pdf ✨           │
+│  • compound_predictions.csv          • tnj_analysis.txt ✨                 │
+│  • pathway_completeness_analysis.csv                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+System Requirements
+Minimum Hardware
+CPU: 2+ cores recommended
+
+RAM: 8 GB minimum, 16 GB+ recommended for large genomes
+
+Storage: 10 GB free space for input files and outputs
+
+Software Dependencies
+Operating System: Linux, macOS, or Windows (with WSL)
+
+Python: 3.8 or higher
+
+Conda: For environment management (recommended)
+
+Required Tools
+gffread: For extracting proteins from GFF files
+
+HMMER: For profile searches (hmmsearch)
+
+Perl: Sometimes required for gffread dependencies
+
+tkinter: For GUI (install python3-tk)
+
+Installation Guide
+Step 1: Create a Conda Environment (Recommended)
+bash
+# Create the environment with Python 3.10
+conda create -n annomining python=3.10 -y
+
+# Activate the environment
+conda activate annomining
+Step 2: Install Core Dependencies
+bash
+# Install bioinformatics tools
+conda install -c conda-forge -c bioconda gffread hmmer -y
+
+# Install Python scientific libraries
+conda install -c conda-forge matplotlib seaborn pandas numpy scipy statsmodels -y
+
+# Install additional file format support
+conda install -c conda-forge openpyxl xlsxwriter -y
+
+# Install tkinter (for GUI)
+conda install -c conda-forge tk -y
+Step 3: Install HMMER Profiles for Secondary Metabolism and Resistance
+bash
+# Create profiles directory
+mkdir -p hmmer_profiles
+cd hmmer_profiles
+
+# Download Pfam database (large file ~400 MB compressed, ~2 GB uncompressed)
+wget -O Pfam-A.hmm.gz "ftp://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.gz"
+
+# Decompress (this may take a few minutes)
+gunzip Pfam-A.hmm.gz
+
+# Extract specific profiles using Python
+python3 << 'EOF'
+import re
+
+# Secondary metabolism profiles
+names = {
+    'PF01397': 'Terpene_synthase',
+    'PF03936': 'Terpene_synthase_N',
+    'PF00067': 'Cytochrome_P450',
+    'PF00195': 'Chalcone_synthase',
+    'PF00891': 'O_methyltransferase',
+    'PF01596': 'SAM_methyltransferase',
+    'PF00248': 'Cyclase',
+    'PF00494': 'Prenyltransferase',
+    'PF02797': 'Flavonoid_3_hydroxylase',
+    'PF00201': 'Alkaloid_synthase',
+    'PF00514': 'Carotenoid_biosynthesis',
+}
+
+# Disease resistance profiles (NEW in v3.6)
+resistance_names = {
+    'PF00931': 'NB_ARC',
+    'PF01582': 'TIR',
+    'PF00560': 'LRR',
+    'PF01419': 'Jacalin',
+    'PF05659': 'RPW8',
+    'PF13676': 'TIR_2',
+    'PF07723': 'LRR_5',
+}
+
+all_names = {**names, **resistance_names}
+
+with open('Pfam-A.hmm', 'r') as f:
+    content = f.read()
+
+blocks = re.split(r'(?=HMMER3/f)', content)
+
+for pfam, name in all_names.items():
+    for block in blocks:
+        if re.search(rf'^ACC\s+{pfam}\.\d+', block, re.MULTILINE):
+            with open(f"{name}.hmm", 'w') as f:
+                f.write(block)
+            print(f"✅ {name}.hmm extracted")
+            break
+
+EOF
+
+# Return to main directory
+cd ..
+Step 4: Download AnnoMining Script
+Save the script as annoMining3.6.py in your working directory.
+
+Step 5: Verify Installation
+bash
+# Check if all tools are available
+gffread --version
+hmmsearch -h | head -3
+
+# Verify Python libraries
+python3 -c "import pandas, numpy, matplotlib, seaborn, scipy, statsmodels; print('✅ All libraries installed')"
+Input Files
+Mandatory Inputs
+File	Format	Description	Source
+EggNOG annotations	.emapper.annotations	Functional annotation from EggNOG-mapper	EggNOG-mapper v2
+InterProScan annotations	.tsv	Domain predictions from InterProScan	InterProScan v5
+Optional but Recommended Inputs
+File	Format	Description	Source
+GFF file	.gff3	Filtered gene predictions	BRAKER3 + hintsFilter
+Genome FASTA	.fasta	Genome assembly file	Assembly pipeline
+HMM profiles	.hmm	HMMER profile directory	Downloaded from Pfam
+Note: The GFF and genome FASTA are required for HMMER-based detection. Without them, AnnoMining will only use EggNOG and InterProScan annotations.
+
+File Preparation
+For EggNOG:
+Use the --output_type annotations option when running EggNOG-mapper
+
+The file should contain columns with KEGG pathways, KOs, EC numbers, and PFAM domains
+
+For InterProScan:
+Use the --output-format tsv option
+
+The file should include PFAM domain predictions
+
+For GFF:
+The GFF should contain gene features with IDs
+
+Best if filtered using hintsFilter to ensure only confident predictions
+
+Output Files
+Core Reports
+File	Description
+*_statistics.txt	Summary statistics including total genes, secondary genes, class distribution
+*_secondary_genes_table.csv	Complete list of secondary metabolism genes with annotations
+*_pharma_genes_table.csv	Filtered list of genes with pharmaceutical potential
+*_resistance_statistics.txt	✨ Disease resistance summary statistics
+*_resistance_genes_table.csv	✨ Complete list of resistance genes with classifications
+Secondary Metabolism Visualizations
+File	Description
+*_combined_high_medium_pfam_dotplot.pdf	Dot plot showing enriched PFAM domains in HIGH+MEDIUM genes
+*_heatmap_scores.pdf	Heatmap of gene-pathway associations with pharma scores
+*_pharma_heatmap_scores.pdf	Heatmap focused on pharmaceutical pathways
+*_class_distribution.pdf	Pie charts of metabolite class distribution
+*_pharma_score_ranking.pdf	Top 20 genes ranked by pharmaceutical score
+*_ko_dotplot.pdf	KEGG Ortholog distribution by metabolite class
+*_pathway_completeness.pdf	Genes per pathway analysis
+*_functional_network.pdf	Network of functionally similar high-potential genes
+*_compound_predictions.pdf	Predicted compound classes based on domain architecture
+Disease Resistance Visualizations ✨ NEW
+File	Description
+*_resistance_score_ranking.pdf	Top 20 genes by disease resistance potential
+*_resistance_class_distribution.pdf	Distribution of resistance gene classes (NLR, TNJ, etc.)
+*_resistance_pathway_completeness.pdf	Resistance pathway gene counts
+*_resistance_donut.pdf	Donut chart of resistance potential distribution
+*_resistance_network.pdf	Functional network of resistance genes
+*_tnj_analysis.txt	✨ Detailed TNJ gene analysis
+*_tnj_architectures.pdf	✨ TNJ gene architecture distribution
+*_tnj_confidence.pdf	✨ TNJ gene confidence levels
+*_resistance_pfam_dotplot.pdf	✨ Enriched PFAM domains in resistance genes
+Data Files
+File	Description
+*_pathway_completeness_analysis.csv	Detailed pathway statistics
+*_functional_network.csv	Edge list for functional network
+*_compound_predictions.csv	Compound predictions for high-scoring genes
+*_combined_pfam_category_summary.csv	Summary of enriched PFAM categories
+*_resistance_network.csv	✨ Resistance network edge list
+*_resistance_pfam_enrichment.csv	✨ Statistical enrichment of resistance PFAMs
+*_tnj_genes_table.csv	✨ Complete table of TNJ genes
+Using the Graphical Interface
+Launching the GUI
+bash
+conda activate annomining
+python3 annoMining3.6.py
+Main Tabs
+1. Secondary Metabolism Tab
+Identifies secondary metabolism genes using EggNOG, InterProScan, and HMMER.
+
+Step-by-Step Instructions:
+
+Select Input Files
+
+EggNOG: Click "Browse" and select your .emapper.annotations file
+
+InterProScan: Click "Browse" and select your .tsv file
+
+GFF (Optional): Click "Browse" and select your filtered GFF file
+
+Genome FASTA (Optional): Click "Browse" and select your genome assembly
+
+Configure HMMER (Optional)
+
+Specify the directory containing your HMM profiles (e.g., hmmer_profiles/)
+
+Set Output Directory
+
+Default: secondary_metabolism
+
+Run Analysis
+
+Click the "▶ Run Analysis" button
+
+Progress will appear in the log window
+
+2. Pharma Analysis Tab
+For detailed pharmaceutical potential analysis of secondary metabolism genes.
+
+Steps:
+
+Select Input Files - Same EggNOG and InterProScan files
+
+Set Parameters
+
+Threshold Score: Default 4 (lower = more MEDIUM genes)
+
+Network Nodes: Number of genes in functional network (default 15)
+
+Network Method: Selection method (enrichment, score, or balanced)
+
+Run Analysis
+
+3. Disease Resistance Tab ✨ NEW
+For comprehensive disease resistance gene analysis.
+
+Steps:
+
+Select Input Files
+
+EggNOG and InterProScan files (as above)
+
+GFF and Genome FASTA for HMMER detection
+
+Set Parameters
+
+Threshold Score: Default 5
+
+Network Nodes: Number of genes in resistance network (default 15)
+
+Network Method: Selection method (enrichment, score, or balanced)
+
+Run Analysis - Click "▶ Run Analysis"
+
+Output includes:
+
+Resistance gene classification (NLR, TIR-NLR, CC-NLR, TNJ, etc.)
+
+TNJ gene detection with architecture and confidence levels
+
+Resistance pathway mapping
+
+Functional network visualization
+
+4. eggnog2kegg Tab
+Utility to extract KEGG Orthologs from EggNOG files.
+
+Command-Line Usage
+Basic Usage
+bash
+python3 annoMining3.6.py [arguments]
+Secondary Metabolism Analysis
+bash
+python3 annoMining3.6.py --mode secondary \
+    --eggnog eggnog.emapper.annotations \
+    --interpro interpro.tsv \
+    --gff braker_confident_only.gff3 \
+    --genome genome.fasta \
+    --hmm_dir hmmer_profiles/ \
+    --output_dir secondary_metabolism
+Pharma Analysis
+bash
+python3 annoMining3.6.py --mode pharma \
+    --eggnog eggnog.emapper.annotations \
+    --interpro interpro.tsv \
+    --gff braker_confident_only.gff3 \
+    --genome genome.fasta \
+    --hmm_dir hmmer_profiles/ \
+    --output_dir pharma_analysis \
+    --threshold 4 \
+    --nodes 15 \
+    --method enrichment
+Disease Resistance Analysis ✨ NEW
+bash
+python3 annoMining3.6.py --mode resistance \
+    --eggnog eggnog.emapper.annotations \
+    --interpro interpro.tsv \
+    --gff braker_confident_only.gff3 \
+    --genome genome.fasta \
+    --hmm_dir hmmer_profiles/ \
+    --output_dir resistance_analysis \
+    --threshold 5 \
+    --nodes 15 \
+    --method enrichment
+Multi-Genome Analysis
+bash
+python3 annoMining3.6.py --mode multi \
+    --eggnog file1.emapper.annotations,file2.emapper.annotations \
+    --interpro interpro1.tsv,interpro2.tsv \
+    --names Species1,Species2 \
+    --output_dir multi_analysis
+Complete Argument Reference
+Argument	Description	Required
+--mode	Analysis mode: secondary, pharma, resistance, multi, eggnog2kegg	Yes
+--eggnog	Path to EggNOG annotations file	Yes
+--interpro	Path to InterProScan TSV file	For secondary/pharma
+--gff	Path to GFF file	No (recommended)
+--genome	Path to genome FASTA file	Required if using GFF
+--hmm_dir	Directory with HMM profiles	No
+--output_dir	Output directory name	No (defaults vary)
+--threshold	Score threshold (default: 4 for pharma, 5 for resistance)	No
+--nodes	Network nodes (default: 15)	No
+--method	Network selection method (default: enrichment)	No
+--names	Comma-separated species names (multi mode)	Yes for multi
+Understanding the Results
+Pharmaceutical Potential Scores
+AnnoMining assigns scores based on:
+
+Pathway contribution (+2 points per pharma-related KEGG pathway)
+
+KEGG Ortholog presence (+3 points per pharma-related KO)
+
+PFAM domain presence (+2 points per core pharma domain)
+
+Classification thresholds (default threshold = 4):
+
+HIGH: Score ≥ 10
+
+MEDIUM: Score ≥ 4 and < 10
+
+LOW: Score ≥ 1 and < 4
+
+NONE: Score = 0
+
+Disease Resistance Scores ✨ NEW
+AnnoMining assigns resistance scores based on:
+
+Domain architecture (NLR, TIR, NB-ARC, LRR, Jacalin, etc.)
+
+Resistance class detection (TNJ, TNL, CC-NLR, etc.)
+
+Pathway involvement (plant-pathogen interaction, MAPK signaling)
+
+KO presence (NLR genes, MAPK signaling, defense proteins)
+
+Classification thresholds (default threshold = 5):
+
+HIGH: Score ≥ 10
+
+MEDIUM: Score ≥ 5 and < 10
+
+LOW: Score ≥ 1 and < 5
+
+NONE: Score = 0
+
+TNJ Gene Classification ✨ NEW
+TNJ (TIR-NBS-Jacalin) genes are classified based on domain architecture:
+
+Architecture	Domains	Confidence
+TNJ canônico	TIR + NB-ARC + Jacalin	HIGH
+TNJ-like	TIR + NB-ARC + Jacalin + LRR	MEDIUM
+NLR-Jacalin	NB-ARC + Jacalin (no TIR)	MEDIUM
+TNL clássico	TIR + NB-ARC + LRR	HIGH
+Interpreting the Statistics File
+Secondary Metabolism Example:
+text
+SECONDARY METABOLISM ANALYSIS - SUMMARY
+Total genes: 29,698
+Secondary genes: 746
+Percentage: 2.5%
+
+Genes by class:
+  Phenylpropanoids: 335
+  Terpenoids: 286
+  Alkaloids: 58
+  Glucosinolates: 31
+  Cannabinoids: 14
+  Xanthines: 4
+
+Pharmaceutical potential subset:
+  Total pharma genes: 725
+  Percentage of secondary: 97.2%
+  HIGH: 4
+  MEDIUM: 205
+  LOW: 516
+Disease Resistance Example ✨ NEW:
+text
+DISEASE RESISTANCE GENE ANALYSIS
+Total genes: 29,698
+
+Genes with disease resistance potential: 1,247
+  Percentage of total: 4.2%
+  HIGH: 23
+  MEDIUM: 189
+  LOW: 1,035
+
+TNJ genes detected: 12
+  Architectures:
+    TIR-NB-ARC-Jacalin (TNJ canônico): 8
+    TIR-NB-ARC-Jacalin-LRR (TNJ-like): 3
+    NB-ARC-Jacalin (NLR com Jacalin): 1
+
+Resistance classes:
+  NLR: 345
+  TIR_NLR: 189
+  LRR_repeat: 178
+  NB_ARC: 156
+  TNJ: 12
+Disease Resistance Analysis
+The disease resistance module provides comprehensive characterization of plant resistance genes:
+
+Resistance Gene Classes Detected
+Class	Domains	Description
+NLR	NB-ARC + LRR	Classic NLR resistance genes
+TIR_NLR	TIR + NB-ARC + LRR	TIR-domain containing NLRs
+TNJ	TIR + NB-ARC + Jacalin	Myrtaceae-specific resistance genes
+TNJ_like	TIR + NB-ARC + Jacalin + LRR	Extended TNJ architecture
+CC_NLR	CC + NB-ARC + LRR	Coiled-coil NLRs
+TNL	TIR + NB-ARC + LRR	TIR-NBS-LRR
+RPW8	RPW8 domains	RPW8-type resistance
+NB_ARC	NB-ARC	Nucleotide-binding domain
+TIR	TIR	Toll/Interleukin-1 receptor
+LRR_repeat	LRR	Leucine-rich repeats
+Jacalin	Jacalin	Jacalin lectin domain
+NLR_Jacalin	NB-ARC + Jacalin	NLR with Jacalin (no TIR)
+Resistance Pathways Mapped
+Pathway	KEGG ID	Description
+Plant-pathogen interaction	map04626	Plant defense signaling
+MAPK signaling - plant	map04016	MAPK cascade
+Hormone signal transduction	map04075	SA, JA, ET, ABA signaling
+Phenylpropanoid biosynthesis	map00940	Lignin and phytoalexins
+Flavonoid biosynthesis	map00941	Flavonoid phytoalexins
+Terpenoid backbone	map00900	Terpenoid phytoalexins
+TNJ Gene Detection
+TNJ genes are a Myrtaceae-specific family of resistance genes characterized by the TIR-NBS-Jacalin domain architecture.
+
+Detection Criteria
+Mandatory Domains (for canonical TNJ):
+
+PF01582 (TIR domain)
+
+PF00931 (NB-ARC domain)
+
+PF01419 (Jacalin domain)
+
+Optional Domains:
+
+PF00560 (LRR domain) - for TNJ-like
+
+PF13676 (TIR_2) - alternative TIR domain
+
+TNJ Architecture Types
+Type	Domain Composition	Confidence
+Canonical TNJ	TIR + NB-ARC + Jacalin	HIGH
+TNJ-like	TIR + NB-ARC + Jacalin + LRR	MEDIUM
+NLR-Jacalin	NB-ARC + Jacalin (no TIR)	MEDIUM
+TNJ Analysis Output
+The tnj_analysis.txt file provides:
+
+Total number of TNJ genes detected
+
+Architecture distribution
+
+Confidence levels
+
+Resistance potential distribution
+
+Complete gene list with details
+
+Interpreting TNJ Results
+Presence of TNJ genes indicates potential for species-specific resistance mechanisms
+
+Canonical TNJ (TIR-NB-ARC-Jacalin) suggests typical TNJ function
+
+TNJ-like genes may represent evolutionary intermediates or specialized variants
+
+No TNJ genes detected is consistent with the variation observed in Myrtaceae; some species naturally lack these genes
+
+Troubleshooting
+Common Issues and Solutions
+Issue	Solution
+"gffread not found"	Ensure gffread is installed: conda install -c bioconda gffread
+"HMMER profiles not found"	Download profiles or specify correct directory. See installation guide.
+"No secondary genes found"	Check input files. Ensure EggNOG annotations include KEGG pathways.
+"No resistance genes detected"	This may be biologically accurate for some species. Check that resistance domains are present in your HMM profiles.
+"GUI does not start"	Install tkinter: conda install -c conda-forge tk
+"ValueError: could not convert string to float"	Check HMMER output parsing. Ensure using the corrected version 3.6.
+"MemoryError"	Reduce number of genes analyzed or increase RAM.
+"TNJ detection not working"	Ensure Jacalin domain (PF01419) is in your HMM profiles.
+Debug Mode
+To run with more verbose output:
+
+bash
+python3 annoMining3.6.py 2>&1 | tee output.log
+Checking HMMER Profiles
+To verify a profile is valid:
+
+bash
+hmmsearch --check hmmer_profiles/TIR.hmm
+hmmsearch --check hmmer_profiles/Jacalin.hmm
+hmmsearch --check hmmer_profiles/NB_ARC.hmm
+Frequently Asked Questions
+Q: Why do I need both EggNOG and InterProScan?
+A: They provide complementary information. EggNOG gives KEGG pathways and KOs, while InterProScan provides PFAM domains. Combining them improves detection.
+
+Q: What does HMMER add to the analysis?
+A: HMMER can detect genes with characteristic domains even if they lack functional annotation in databases. This is crucial for non-model species and for detecting resistance genes that may be species-specific.
+
+Q: What are TNJ genes and why are they important?
+A: TNJ (TIR-NBS-Jacalin) genes are a Myrtaceae-specific family of disease resistance genes. They combine TIR and NB-ARC domains with a Jacalin lectin domain. Detection of these genes can indicate species-specific resistance mechanisms.
+
+Q: How do I know if HMMER found new genes?
+A: The log will show "HMMER identified X genes with domains". The statistics file will show the total secondary/resistance gene count.
+
+Q: Can I run AnnoMining without the GUI?
+A: Yes. Use command-line mode with the --mode argument.
+
+Q: What if my genome has no EggNOG or InterProScan annotations?
+A: AnnoMining requires at least EggNOG annotations. Consider running EggNOG-mapper on your proteome first.
+
+Q: How long does the analysis take?
+A: For a typical plant genome (~30,000 genes), secondary metabolism analysis takes 5-15 minutes. Resistance analysis adds 5-10 minutes. HMMER searches depend on the number of profiles used.
+
+Q: What does the "Other" category represent?
+A: The "Other" category includes pathways that don't fit the main classes. Check the specific pathways in the table.
+
+Q: Can I add my own HMM profiles?
+A: Yes. Add your profiles to the hmmer_profiles directory and update the appropriate dictionary in the script.
+
+Q: Why didn't my genome detect any TNJ genes?
+A: TNJ genes are specific to Myrtaceae and may not be present in all species. Additionally, some Myrtaceae species naturally lack TNJ genes. Check that your genome has TIR and NB-ARC domains (these are more broadly distributed).
+
+Q: How do I interpret the resistance network?
+A: The resistance network shows connections between genes based on shared resistance classes, pathways, and PFAM domains. Node color indicates resistance potential (HIGH/MEDIUM/LOW), and 🔬 indicates TNJ genes.
+
 Citation
 If you use AnnoMining in your research, please cite:
-[Author Name] et al. (2024). AnnoMining: Integrated Platform for Secondary Metabolism Analysis. Version 2.2. GitHub Repository. https://github.com/yourusername/annomining
-________________________________________
+
+text
+AnnoMining v3.6: A comprehensive pipeline for secondary metabolism,
+pharmaceutical potential, and disease resistance discovery in plant genomes.
 License
-AnnoMining is provided under the MIT License.
-________________________________________
-Contact and Support
-•	GitHub Issues: https://github.com/yourusername/annomining/issues
-•	Email: valdir.stefenon@ufsc.br
-________________________________________
+AnnoMining is distributed under the MIT License.
+
+Version History
+Version	Date	Changes
+v3.6	Sep 2026	✨ Disease resistance module with TNJ detection
+v3.5	Aug 2026	Full GFF/HMMER integration
+v3.1	Aug 2026	HMMER support added
+v3.0	Jul 2026	Initial release
+AnnoMining v3.6 | Making secondary metabolism, pharmaceutical, and disease resistance discovery accessible to everyone
 
