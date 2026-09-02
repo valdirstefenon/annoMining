@@ -1,0 +1,2404 @@
+import sys
+import os
+import re
+import argparse
+from collections import defaultdict, Counter
+from datetime import datetime
+import pandas as pd
+import numpy as np
+import warnings
+warnings.filterwarnings('ignore')
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.patches import Patch, Circle
+from matplotlib.lines import Line2D
+from itertools import combinations
+from scipy.stats import fisher_exact, chi2_contingency
+from statsmodels.stats.multitest import multipletests
+
+plt.style.use('seaborn-v0_8-darkgrid')
+sns.set_palette("husl")
+matplotlib.rcParams['figure.dpi'] = 300
+matplotlib.rcParams['savefig.dpi'] = 300
+matplotlib.rcParams['savefig.bbox'] = 'tight'
+matplotlib.rcParams['axes.linewidth'] = 0.5
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+matplotlib.rcParams['font.family'] = 'DejaVu Sans'
+
+try:
+    import tkinter as tk
+    from tkinter import ttk, filedialog, messagebox, scrolledtext
+except ImportError:
+    print("Erro: tkinter não disponível. Instale python3-tk.")
+    sys.exit(1)
+
+# ============================================================================
+# DICIONÁRIOS UNIFICADOS
+# ============================================================================
+SECONDARY_PATHWAYS = {
+    'map00900': {'name': 'Terpenoid backbone', 'class': 'Terpenoids', 'color': '#2E86AB', 'pharma': True},
+    'map00902': {'name': 'Monoterpenoid', 'class': 'Terpenoids', 'color': '#2E86AB', 'pharma': True},
+    'map00904': {'name': 'Diterpenoid', 'class': 'Terpenoids', 'color': '#2E86AB', 'pharma': True},
+    'map00905': {'name': 'Brassinosteroid', 'class': 'Terpenoids', 'color': '#2E86AB', 'pharma': True},
+    'map00906': {'name': 'Carotenoid', 'class': 'Terpenoids', 'color': '#2E86AB', 'pharma': True},
+    'map00908': {'name': 'Zeatin', 'class': 'Terpenoids', 'color': '#2E86AB', 'pharma': True},
+    'map00909': {'name': 'Sesquiterpenoid/Triterpenoid', 'class': 'Terpenoids', 'color': '#2E86AB', 'pharma': True},
+    'map00940': {'name': 'Phenylpropanoid', 'class': 'Phenylpropanoids', 'color': '#A23B72', 'pharma': True},
+    'map00941': {'name': 'Flavonoid', 'class': 'Phenylpropanoids', 'color': '#A23B72', 'pharma': True},
+    'map00942': {'name': 'Anthocyanin', 'class': 'Phenylpropanoids', 'color': '#A23B72', 'pharma': True},
+    'map00943': {'name': 'Isoflavonoid', 'class': 'Phenylpropanoids', 'color': '#A23B72', 'pharma': True},
+    'map00944': {'name': 'Flavone/Flavonol', 'class': 'Phenylpropanoids', 'color': '#A23B72', 'pharma': True},
+    'map00945': {'name': 'Stilbenoid/Curcuminoid', 'class': 'Phenylpropanoids', 'color': '#A23B72', 'pharma': True},
+    'map00950': {'name': 'Isoquinoline alkaloid', 'class': 'Alkaloids', 'color': '#F18F01', 'pharma': True},
+    'map00960': {'name': 'Tropane/Piperidine', 'class': 'Alkaloids', 'color': '#F18F01', 'pharma': True},
+    'map00965': {'name': 'Betalain', 'class': 'Alkaloids', 'color': '#F18F01', 'pharma': True},
+    'map00966': {'name': 'Glucosinolate', 'class': 'Glucosinolates', 'color': '#9B5DE5', 'pharma': True},
+    'map00232': {'name': 'Caffeine metabolism', 'class': 'Xanthines', 'color': '#F15BB5', 'pharma': True},
+    'map00910': {'name': 'Nitrogen metabolism', 'class': 'Other', 'color': '#6A4E3A', 'pharma': False},
+    'map00401': {'name': 'Novobiocin', 'class': 'Other', 'color': '#6A4E3A', 'pharma': True},
+    'map00522': {'name': 'Various plant secondary metabolites', 'class': 'Other', 'color': '#6A4E3A', 'pharma': True},
+    'map00903': {'name': 'Cannabinoid biosynthesis', 'class': 'Cannabinoids', 'color': '#FF006E', 'pharma': True},
+}
+
+PHARMA_DETAILS = {
+    'map00950': {'name': 'Isoquinoline alkaloid', 'class': 'Alkaloids',
+                 'compounds': 'morphine, codeine, berberine', 'pharma_use': 'Analgesic, antimicrobial',
+                 'color': '#E63946'},
+    'map00960': {'name': 'Tropane/Piperidine', 'class': 'Alkaloids',
+                 'compounds': 'atropine, cocaine, nicotine', 'pharma_use': 'Anticholinergic',
+                 'color': '#E63946'},
+    'map00965': {'name': 'Betalain', 'class': 'Alkaloids',
+                 'compounds': 'betanin, indicaxanthin', 'pharma_use': 'Antioxidant',
+                 'color': '#E63946'},
+    'map00900': {'name': 'Terpenoid backbone', 'class': 'Terpenoids',
+                 'compounds': 'precursors for all terpenes', 'pharma_use': 'Diverse bioactivities',
+                 'color': '#2A9D8F'},
+    'map00909': {'name': 'Sesquiterpenoid/Triterpenoid', 'class': 'Terpenoids',
+                 'compounds': 'artemisinin, taxol, ginsenosides', 'pharma_use': 'Antimalarial, anticancer',
+                 'color': '#2A9D8F'},
+    'map00904': {'name': 'Diterpenoid', 'class': 'Terpenoids',
+                 'compounds': 'tanshinone, forskolin', 'pharma_use': 'Cardiovascular',
+                 'color': '#2A9D8F'},
+    'map00906': {'name': 'Carotenoid', 'class': 'Terpenoids',
+                 'compounds': 'β-carotene, lycopene', 'pharma_use': 'Antioxidant',
+                 'color': '#2A9D8F'},
+    'map00908': {'name': 'Zeatin biosynthesis', 'class': 'Terpenoids',
+                 'compounds': 'zeatin, cytokinins', 'pharma_use': 'Anti-aging',
+                 'color': '#2A9D8F'},
+    'map00940': {'name': 'Phenylpropanoid', 'class': 'Phenylpropanoids',
+                 'compounds': 'curcumin, resveratrol', 'pharma_use': 'Antioxidant',
+                 'color': '#E9C46A'},
+    'map00941': {'name': 'Flavonoid', 'class': 'Flavonoids',
+                 'compounds': 'quercetin, kaempferol, catechins', 'pharma_use': 'Cardioprotective',
+                 'color': '#E9C46A'},
+    'map00942': {'name': 'Anthocyanin', 'class': 'Flavonoids',
+                 'compounds': 'cyanidin, delphinidin', 'pharma_use': 'Antioxidant',
+                 'color': '#E9C46A'},
+    'map00944': {'name': 'Flavone/Flavonol', 'class': 'Flavonoids',
+                 'compounds': 'apigenin, luteolin', 'pharma_use': 'Anti-inflammatory',
+                 'color': '#E9C46A'},
+    'map00945': {'name': 'Stilbenoid/Curcuminoid', 'class': 'Stilbenoids',
+                 'compounds': 'resveratrol, curcumin', 'pharma_use': 'Chemopreventive',
+                 'color': '#E9C46A'},
+    'map00966': {'name': 'Glucosinolate', 'class': 'Glucosinolates',
+                 'compounds': 'sulforaphane', 'pharma_use': 'Anticancer',
+                 'color': '#9B5DE5'},
+    'map00232': {'name': 'Caffeine metabolism', 'class': 'Xanthines',
+                 'compounds': 'caffeine', 'pharma_use': 'Stimulant',
+                 'color': '#F15BB5'},
+    'map00401': {'name': 'Novobiocin biosynthesis', 'class': 'Antibiotics',
+                 'compounds': 'novobiocin', 'pharma_use': 'Antibacterial',
+                 'color': '#00BBF9'},
+    'map00903': {'name': 'Cannabinoid biosynthesis', 'class': 'Cannabinoids',
+                 'compounds': 'THC, CBD', 'pharma_use': 'Analgesic, anti-epileptic',
+                 'color': '#FF006E'},
+    'map00522': {'name': 'Various plant secondary metabolites', 'class': 'Other',
+                 'compounds': 'mixed pathways', 'pharma_use': 'Diverse',
+                 'color': '#CCCCCC'},
+}
+
+PHARMA_KOS = {
+    'Bioactive_flavonoids': ['K00660','K05275','K05276','K13065','K13066','K05265','K05266','K13083','K13084'],
+    'Anticancer_terpenes': ['K15891','K15892','K15893','K00487','K00507','K00509','K00511','K00512'],
+    'Nutraceutical_carotenoids': ['K00514','K00515','K06444','K06445','K06446','K06447','K06448','K06449','K06450','K06451'],
+    'Resveratrol_biosynthesis': ['K13071','K13072','K00430','K00431'],
+    'Therapeutic_alkaloids': ['K01799','K01800','K01900','K01901','K01902','K01903'],
+}
+
+CORE_PHARMA_DOMAINS = {
+    'Flavonoids': ['PF00195', 'PF02797', 'PF05834'],
+    'Terpenoids': ['PF01397', 'PF03936', 'PF00067', 'PF00494'],
+    'Alkaloids': ['PF01596', 'PF00891', 'PF00201', 'PF00155', 'PF00141'],
+    'Phenylpropanoids': ['PF00195', 'PF00141'],
+    'Carotenoids': ['PF00494', 'PF00514'],
+    'P450': ['PF00067'],
+    'Methyltransferases': ['PF01596', 'PF00891', 'PF01799']
+}
+
+GENERIC_DOMAINS = [
+    'PF00232', 'PF00221', 'PF02728', 'PF01179', 'PF01154',
+    'PF01255', 'PF01315', 'PF01370', 'PF01398', 'PF01494',
+    'PF01593', 'PF01715', 'PF01915', 'PF02431', 'PF02670',
+    'PF02738', 'PF02798', 'PF02803', 'PF02900', 'PF03171',
+    'PF03450', 'PF03754', 'PF05368', 'PF08436', 'PF08502',
+    'PF08540', 'PF08544', 'PF09265', 'PF12142', 'PF12143',
+    'PF13193', 'PF13243', 'PF13249', 'PF13292', 'PF13460',
+    'PF13561', 'PF14226', 'PF14497', 'PF08100', 'PF13450',
+    'PF00348', 'PF00368', 'PF00107', 'PF00108', 'PF00111',
+    'PF00264', 'PF00282', 'PF00501', 'PF00682', 'PF00933',
+    'PF00941', 'PF01315', 'PF01370', 'PF01565', 'PF02727',
+    'PF02803', 'PF03055', 'PF03450', 'PF03754', 'PF08491'
+]
+
+# ============================================================================
+# FUNÇÕES DE PARSING
+# ============================================================================
+
+def parse_eggnog_universal(eggnog_file):
+    data = {
+        'genes': {},
+        'kegg_pathways': defaultdict(set),
+        'ec_numbers': defaultdict(set),
+        'ko_numbers': defaultdict(set),
+        'go_terms': defaultdict(set),
+        'pfam_domains': defaultdict(set),
+        'cog_categories': Counter(),
+    }
+    patterns = {
+        'ko': re.compile(r'(?:ko:)?(K\d+)', re.IGNORECASE),
+        'pathway': re.compile(r'(?:ko)?(map\d{5})', re.IGNORECASE),
+        'ec': re.compile(r'(\d+\.\d+\.\d+\.\d+)'),
+        'go': re.compile(r'(GO:\d+)', re.IGNORECASE),
+        'pfam': re.compile(r'(PF\d+)', re.IGNORECASE),
+    }
+    with open(eggnog_file, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            fields = line.strip().split('\t')
+            if len(fields) < 2:
+                continue
+            gene = fields[0]
+            description = ''
+            for field in fields[1:8]:
+                if field and field != '-' and not field.startswith('COG') and not field.startswith('KOG'):
+                    if len(field) < 100 and not any(x in field for x in ['@','|']):
+                        description = field
+                        break
+            cog_category = '-'
+            for field in fields:
+                if re.match(r'^[A-Z]+$', field) and len(field) <= 5:
+                    cog_category = field
+                    break
+            data['genes'][gene] = {'description': description if description else '-', 'cog_category': cog_category}
+            for c in cog_category:
+                if c.isalpha():
+                    data['cog_categories'][c] += 1
+            for ko in patterns['ko'].findall(line):
+                if ko.startswith('K'):
+                    data['ko_numbers'][gene].add(ko)
+            for path in patterns['pathway'].findall(line):
+                if path.startswith('map'):
+                    data['kegg_pathways'][gene].add(path)
+            for ec in patterns['ec'].findall(line):
+                data['ec_numbers'][gene].add(ec)
+            for go in patterns['go'].findall(line):
+                data['go_terms'][gene].add(go)
+            for pfam in patterns['pfam'].findall(line):
+                data['pfam_domains'][gene].add(pfam)
+    return data
+
+def parse_interpro_universal(interpro_file):
+    data = {
+        'genes': set(),
+        'pfam_domains': defaultdict(set),
+        'go_terms': defaultdict(set),
+        'interpro_domains': defaultdict(set)
+    }
+    if not os.path.exists(interpro_file):
+        return data
+    patterns = {
+        'pfam': re.compile(r'(PF\d+)', re.IGNORECASE),
+        'go': re.compile(r'(GO:\d+)', re.IGNORECASE),
+    }
+    with open(interpro_file, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            fields = line.strip().split('\t')
+            if len(fields) < 5:
+                continue
+            gene = fields[0]
+            data['genes'].add(gene)
+            for field in fields:
+                pfam_match = patterns['pfam'].search(field)
+                if pfam_match:
+                    data['pfam_domains'][gene].add(pfam_match.group(1))
+            for go in patterns['go'].findall(line):
+                data['go_terms'][gene].add(go)
+            if len(fields) > 12 and fields[12] and fields[12] != '-':
+                data['interpro_domains'][gene].add(fields[12])
+    return data
+
+# ============================================================================
+# FUNÇÕES DE MERGE
+# ============================================================================
+
+def merge_annotation_data(eggnog_data, interpro_data, pathway_dict):
+    merged = {}
+    all_genes = set(eggnog_data['genes'].keys()) | interpro_data['genes']
+    
+    for gene in all_genes:
+        merged[gene] = {
+            'source': [],
+            'description': eggnog_data['genes'].get(gene, {}).get('description', '-'),
+            'cog_category': eggnog_data['genes'].get(gene, {}).get('cog_category', '-'),
+            'go_terms': eggnog_data['go_terms'].get(gene, set()) | interpro_data['go_terms'].get(gene, set()),
+            'pfam_domains': eggnog_data['pfam_domains'].get(gene, set()) | interpro_data['pfam_domains'].get(gene, set()),
+            'kegg_pathways': eggnog_data['kegg_pathways'].get(gene, set()),
+            'ec_numbers': eggnog_data['ec_numbers'].get(gene, set()),
+            'ko_numbers': eggnog_data['ko_numbers'].get(gene, set()),
+            'secondary_pathways': set(),
+            'secondary_class': set()
+        }
+        
+        if gene in eggnog_data['genes']:
+            merged[gene]['source'].append('eggNOG')
+        if gene in interpro_data['genes']:
+            merged[gene]['source'].append('InterProScan')
+        
+        for path in merged[gene]['kegg_pathways']:
+            if path in pathway_dict:
+                merged[gene]['secondary_pathways'].add(path)
+                merged[gene]['secondary_class'].add(pathway_dict[path]['class'])
+    
+    return merged
+
+# ============================================================================
+# FUNÇÃO DE VALIDAÇÃO DE GRUPOS
+# ============================================================================
+
+def validate_pharma_groups(merged_data):
+    high = set([g for g, info in merged_data.items() if info.get('pharma_potential') == 'HIGH'])
+    medium = set([g for g, info in merged_data.items() if info.get('pharma_potential') == 'MEDIUM'])
+    low = set([g for g, info in merged_data.items() if info.get('pharma_potential') == 'LOW'])
+    
+    print("\n🔍 VALIDAÇÃO DE GRUPOS FARMACOLÓGICOS:")
+    print(f"   HIGH: {len(high)} genes")
+    print(f"   MEDIUM: {len(medium)} genes")
+    print(f"   LOW: {len(low)} genes")
+    
+    overlap_hm = high & medium
+    overlap_hl = high & low
+    overlap_ml = medium & low
+    
+    issues_found = False
+    
+    if overlap_hm:
+        print(f"   ⚠️ SOBREPOSIÇÃO HIGH-MEDIUM: {len(overlap_hm)} genes")
+        issues_found = True
+    if overlap_hl:
+        print(f"   ⚠️ SOBREPOSIÇÃO HIGH-LOW: {len(overlap_hl)} genes")
+        issues_found = True
+    if overlap_ml:
+        print(f"   ⚠️ SOBREPOSIÇÃO MEDIUM-LOW: {len(overlap_ml)} genes")
+        issues_found = True
+    
+    if not issues_found:
+        print("   ✅ Grupos são mutuamente exclusivos")
+    else:
+        print("\n🔧 CORRIGINDO SOBREPOSIÇÕES (prioridade: HIGH > MEDIUM > LOW):")
+        for gene in overlap_hm:
+            merged_data[gene]['pharma_potential'] = 'HIGH'
+        if overlap_hl:
+            for gene in overlap_hl:
+                merged_data[gene]['pharma_potential'] = 'HIGH'
+        if overlap_ml:
+            for gene in overlap_ml:
+                merged_data[gene]['pharma_potential'] = 'MEDIUM'
+    
+    return {
+        'high': high,
+        'medium': medium,
+        'low': low,
+        'overlap_hm': overlap_hm,
+        'overlap_hl': overlap_hl,
+        'overlap_ml': overlap_ml,
+        'issues_found': issues_found
+    }
+
+# ============================================================================
+# FUNÇÕES DE ENRIQUECIMENTO
+# ============================================================================
+
+def calculate_enrichment(group_genes, background_genes, merged_data, min_count=2, min_fold=1.0, filter_generic=True):
+    if not group_genes or not background_genes:
+        return pd.DataFrame()
+    
+    group_pfam_counts = Counter()
+    for gene in group_genes:
+        if gene in merged_data:
+            for pfam in merged_data[gene]['pfam_domains']:
+                if filter_generic and pfam in GENERIC_DOMAINS:
+                    continue
+                group_pfam_counts[pfam] += 1
+    
+    bg_pfam_counts = Counter()
+    for gene in background_genes:
+        if gene in merged_data:
+            for pfam in merged_data[gene]['pfam_domains']:
+                if filter_generic and pfam in GENERIC_DOMAINS:
+                    continue
+                bg_pfam_counts[pfam] += 1
+    
+    total_group = len(group_genes)
+    total_bg = len(background_genes)
+    
+    results = []
+    all_pfams = set(group_pfam_counts.keys()) | set(bg_pfam_counts.keys())
+    
+    for pfam in all_pfams:
+        count_in_group = group_pfam_counts.get(pfam, 0)
+        count_in_bg = bg_pfam_counts.get(pfam, 0)
+        
+        if count_in_group < min_count:
+            continue
+        
+        freq_group = count_in_group / total_group
+        freq_bg = count_in_bg / total_bg if total_bg > 0 else 0
+        
+        if freq_bg == 0:
+            fold_enrich = freq_group * 100
+        else:
+            fold_enrich = freq_group / freq_bg
+        
+        if fold_enrich < min_fold:
+            continue
+        
+        table = [
+            [count_in_group, total_group - count_in_group],
+            [count_in_bg, total_bg - count_in_bg]
+        ]
+        
+        try:
+            oddsratio, p_fisher = fisher_exact(table, alternative='two-sided')
+        except:
+            oddsratio = np.nan
+            p_fisher = 1.0
+        
+        try:
+            chi2, p_chi2, dof, expected = chi2_contingency(table)
+        except:
+            p_chi2 = 1.0
+        
+        p_combined = min(p_fisher, p_chi2)
+        
+        pathway_category = 'Other'
+        for category, domains in CORE_PHARMA_DOMAINS.items():
+            if pfam in domains:
+                pathway_category = category
+                break
+        
+        results.append({
+            'pfam_domain': pfam,
+            'pathway_category': pathway_category,
+            'count_in_group': count_in_group,
+            'total_group': total_group,
+            'freq_group': round(freq_group, 4),
+            'count_in_background': count_in_bg,
+            'total_background': total_bg,
+            'freq_background': round(freq_bg, 4),
+            'fold_enrichment': round(fold_enrich, 2),
+            'odds_ratio': round(oddsratio, 2) if not np.isnan(oddsratio) else np.nan,
+            'p_value': p_combined,
+            'p_adjust': np.nan,
+            'significant': p_combined < 0.05
+        })
+    
+    if results:
+        df = pd.DataFrame(results)
+        if len(df) > 0:
+            _, p_adjust, _, _ = multipletests(df['p_value'].values, method='fdr_bh')
+            df['p_adjust'] = p_adjust
+            df['significant'] = df['p_adjust'] < 0.05
+        return df
+    return pd.DataFrame()
+
+# ============================================================================
+# FUNÇÃO DE ENRIQUECIMENTO COMBINADO
+# ============================================================================
+
+def create_pfam_dotplot_combined(merged_data, output_prefix, top_n=15):
+    print("\n📊 Gerando dotplot combinado HIGH+MEDIUM vs LOW+NONE...")
+    
+    high_medium_genes = [g for g, info in merged_data.items() 
+                        if info.get('pharma_potential') in ['HIGH', 'MEDIUM']]
+    
+    background_genes = [g for g, info in merged_data.items() 
+                       if info.get('pharma_potential') in ['LOW', 'NONE']]
+    
+    if len(high_medium_genes) < 2:
+        print("   ⚠️ Poucos genes HIGH+MEDIUM para análise")
+        return
+    
+    if len(background_genes) < 2:
+        print("   ⚠️ Poucos genes background para análise")
+        return
+    
+    print(f"   Grupo HIGH+MEDIUM: {len(high_medium_genes)} genes")
+    print(f"   Background (LOW+NONE): {len(background_genes)} genes")
+    
+    df_enrich = calculate_enrichment(
+        high_medium_genes, background_genes, merged_data,
+        min_count=2, min_fold=1.0, filter_generic=True
+    )
+    
+    if len(df_enrich) == 0:
+        print("   ⚠️ Nenhum PFAM enriquecido encontrado")
+        return
+    
+    df_sig = df_enrich[df_enrich['significant']]
+    
+    if len(df_sig) == 0:
+        print("   ⚠️ Nenhum PFAM significativamente enriquecido (p.adjust < 0.05)")
+        return
+    
+    df_sig.to_csv(f"{output_prefix}_combined_high_medium_pfam_enrichment.csv", index=False)
+    print(f"   ✅ {len(df_sig)} PFAMs significativamente enriquecidos")
+    
+    top_terms = df_sig.sort_values('fold_enrichment', ascending=False).head(top_n)
+    
+    pathway_colors = {
+        'Flavonoids': '#E76F51',
+        'Terpenoids': '#2A9D8F',
+        'Alkaloids': '#E63946',
+        'Phenylpropanoids': '#E9C46A',
+        'Carotenoids': '#F4A261',
+        'P450': '#9B5DE5',
+        'Methyltransferases': '#F15BB5',
+        'Other': '#CCCCCC'
+    }
+    
+    fig_height = max(6, len(top_terms) * 0.4)
+    fig, ax = plt.subplots(figsize=(16, fig_height))
+    
+    colors = [pathway_colors.get(cat, '#CCCCCC') for cat in top_terms['pathway_category']]
+    
+    scatter = ax.scatter(
+        top_terms['fold_enrichment'],
+        top_terms['pfam_domain'],
+        s=top_terms['count_in_group'] * 15 + 30,
+        c=colors,
+        alpha=0.8,
+        edgecolors='black',
+        linewidth=0.5
+    )
+    
+    ax.set_xlabel('Fold Enrichment', fontsize=12, fontweight='bold')
+    ax.set_ylabel('PFAM Domain', fontsize=12, fontweight='bold')
+    ax.set_title('Enriched PFAM Domains in HIGH+MEDIUM Pharmaceutical Potential Genes\n(Compared to LOW+NONE Background)', 
+                 fontsize=14, fontweight='bold')
+    ax.axvline(x=1, color='red', linestyle='--', alpha=0.5, label='Fold = 1')
+    
+    unique_cats = top_terms['pathway_category'].unique()
+    legend_elements = [Patch(facecolor=pathway_colors.get(cat, '#CCCCCC'), label=cat)
+                       for cat in unique_cats if cat in pathway_colors]
+    
+    if legend_elements:
+        ax.legend(handles=legend_elements,
+                 loc='center left',
+                 bbox_to_anchor=(1.02, 0.5),
+                 fontsize=10,
+                 title='PFAM Category',
+                 title_fontsize=11)
+    
+    plt.subplots_adjust(right=0.78)
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.savefig(f"{output_prefix}_combined_high_medium_pfam_dotplot.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_combined_high_medium_pfam_dotplot.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"   ✅ Dotplot combinado salvo: {output_prefix}_combined_high_medium_pfam_dotplot.pdf")
+    
+    category_summary = df_sig.groupby('pathway_category').size().reset_index(name='count')
+    category_summary = category_summary.sort_values('count', ascending=False)
+    category_summary.to_csv(f"{output_prefix}_combined_pfam_category_summary.csv", index=False)
+    print("\n   📊 Resumo por categoria:")
+    for _, row in category_summary.iterrows():
+        print(f"      {row['pathway_category']}: {row['count']} PFAMs")
+    
+    return df_sig
+
+# ============================================================================
+# HEATMAPS COM GRADIENTE BRANCO-VERMELHO
+# ============================================================================
+
+def create_heatmap_presence_absence(merged_data, output_prefix):
+    """Heatmap"""
+    secondary_genes = {g: info for g, info in merged_data.items() if info['secondary_pathways']}
+    if len(secondary_genes) < 2:
+        return
+    
+    genes_sorted = sorted(secondary_genes.keys(), 
+                         key=lambda x: (secondary_genes[x].get('pharma_score', 0), len(secondary_genes[x]['secondary_pathways'])), 
+                         reverse=True)[:50]
+    
+    pathways_list = list(SECONDARY_PATHWAYS.keys())
+    
+    matrix = []
+    for gene in genes_sorted:
+        row = []
+        for p in pathways_list:
+            if p in secondary_genes[gene]['secondary_pathways']:
+                score = secondary_genes[gene].get('pharma_score', 0)
+                row.append(score if score > 0 else 1)
+            else:
+                row.append(0)
+        matrix.append(row)
+    
+    df = pd.DataFrame(matrix, 
+                      index=[f"{g[:20]} ({secondary_genes[g].get('pharma_score', 0)})" for g in genes_sorted], 
+                      columns=[SECONDARY_PATHWAYS[p]['name'][:20] for p in pathways_list])
+    
+    fig, ax = plt.subplots(figsize=(18, 14))
+    
+    # Gradiente branco-vermelho
+    cmap_white_red = sns.light_palette("#d62728", as_cmap=True, reverse=False)
+    
+    sns.heatmap(df, 
+                cmap=cmap_white_red,
+                cbar_kws={'label': 'Pharma Score / Presence'},
+                linewidths=0.5, 
+                linecolor='lightgray', 
+                ax=ax,
+                vmin=0,
+                square=False)
+    
+    ax.set_title('Gene-Pathway Association with Pharma Scores\n(White = low potential, Red = high potential)', 
+                 fontsize=14, fontweight='bold')
+    plt.xticks(rotation=45, ha='right', fontsize=8)
+    plt.yticks(fontsize=7)
+    plt.subplots_adjust(right=0.92)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_heatmap_scores.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_heatmap_scores.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"   ✅ Heatmap com scores salvo: {output_prefix}_heatmap_scores.pdf")
+
+def create_pharma_heatmap(merged_data, output_prefix):
+    """Heatmap"""
+    pharma_genes = {g: info for g, info in merged_data.items() if info.get('pharma_score', 0) > 0}
+    if len(pharma_genes) < 2:
+        return
+    
+    genes_sorted = sorted(pharma_genes.keys(), 
+                         key=lambda x: pharma_genes[x]['pharma_score'], 
+                         reverse=True)[:50]
+    
+    pathways_list = list(PHARMA_DETAILS.keys())
+    
+    matrix = []
+    for gene in genes_sorted:
+        row = []
+        for p in pathways_list:
+            if p in merged_data[gene]['secondary_pathways']:
+                row.append(merged_data[gene]['pharma_score'])
+            else:
+                row.append(0)
+        matrix.append(row)
+    
+    df = pd.DataFrame(matrix, 
+                      index=[f"{g[:20]} ({pharma_genes[g]['pharma_score']})" for g in genes_sorted], 
+                      columns=[f"{PHARMA_DETAILS[p]['name'][:20]}" for p in pathways_list])
+    
+    fig, ax = plt.subplots(figsize=(20, 16))
+    
+    cmap_white_red = sns.light_palette("#d62728", as_cmap=True, reverse=False)
+    
+    sns.heatmap(df, 
+                cmap=cmap_white_red,
+                cbar_kws={'label': 'Pharma Score'},
+                linewidths=0.5, 
+                linecolor='lightgray', 
+                ax=ax,
+                vmin=0,
+                square=False)
+    
+    ax.set_title('Pharmaceutical & Nutraceutical Pathways - Gene Scores\n(White = low potential, Red = high potential)', 
+                 fontsize=14, fontweight='bold')
+    plt.xticks(rotation=45, ha='right', fontsize=8)
+    plt.yticks(fontsize=7)
+    plt.subplots_adjust(right=0.92)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_pharma_heatmap_scores.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_pharma_heatmap_scores.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"   ✅ Pharma heatmap com scores salvo: {output_prefix}_pharma_heatmap_scores.pdf")
+
+# ============================================================================
+# DEMAIS FUNÇÕES DE VISUALIZAÇÃO (CORRIGIDAS)
+# ============================================================================
+
+def create_ko_dotplot(merged_data, output_prefix, top_n=15):
+    ko_by_class = defaultdict(Counter)
+    class_counts = Counter()
+    for gene, info in merged_data.items():
+        for pathway in info['secondary_pathways']:
+            if pathway in SECONDARY_PATHWAYS:
+                pc = SECONDARY_PATHWAYS[pathway]['class']
+                class_counts[pc] += 1
+                for ko in info['ko_numbers']:
+                    ko_by_class[pc][ko] += 1
+    all_data = []
+    for class_name, ko_counter in ko_by_class.items():
+        total_in_class = class_counts[class_name]
+        for ko, count in ko_counter.most_common(top_n):
+            freq_in_class = count / total_in_class if total_in_class > 0 else 0
+            all_data.append({
+                'class': class_name,
+                'ko': ko,
+                'count': count,
+                'frequency': freq_in_class,
+                'label': f"{ko} [{class_name}]"
+            })
+    if not all_data:
+        return
+    df = pd.DataFrame(all_data)
+    df = df.sort_values('frequency', ascending=False).head(top_n)
+    fig_height = max(6, len(df) * 0.4)
+    fig, ax = plt.subplots(figsize=(14, fig_height))
+    class_colors = {'Terpenoids': '#2E86AB', 'Phenylpropanoids': '#A23B72',
+                    'Alkaloids': '#F18F01', 'Other': '#6A4E3A', 
+                    'Glucosinolates': '#9B5DE5', 'Xanthines': '#F15BB5',
+                    'Cannabinoids': '#FF006E'}
+    colors = [class_colors.get(c, '#999999') for c in df['class']]
+    unique_classes = df['class'].unique()
+    legend_elements = [Patch(facecolor=class_colors.get(c, '#999999'), label=c)
+                       for c in unique_classes if c in class_colors]
+    scatter = ax.scatter(
+        df['frequency'],
+        df['ko'],
+        s=df['count'] * 20 + 30,
+        c=colors,
+        alpha=0.8,
+        edgecolors='black',
+        linewidth=0.5
+    )
+    ax.set_xlabel('Frequency in class', fontsize=12, fontweight='bold')
+    ax.set_ylabel('KEGG Ortholog', fontsize=12, fontweight='bold')
+    ax.set_title('Top KOs by Secondary Metabolite Class', fontsize=14, fontweight='bold')
+    ax.legend(handles=legend_elements,
+             loc='center left',
+             bbox_to_anchor=(1.02, 0.5),
+             fontsize=10,
+             title='Class',
+             title_fontsize=11)
+    plt.subplots_adjust(right=0.78)
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.savefig(f"{output_prefix}_ko_dotplot.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_ko_dotplot.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"   ✅ KO dotplot salvo: {output_prefix}_ko_dotplot.pdf")
+
+def plot_top_kos_by_category(merged_data, output_prefix):
+    ko_by_class = defaultdict(Counter)
+    for gene, info in merged_data.items():
+        for pathway in info['secondary_pathways']:
+            if pathway in SECONDARY_PATHWAYS:
+                pc = SECONDARY_PATHWAYS[pathway]['class']
+                for ko in info['ko_numbers']:
+                    ko_by_class[pc][ko] += 1
+    classes = [c for c in ko_by_class.keys() if sum(ko_by_class[c].values()) > 0]
+    if not classes:
+        return
+    
+    n_cols = min(2, len(classes))
+    n_rows = (len(classes) + n_cols - 1) // n_cols
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 5*n_rows))
+    if n_rows == 1 and n_cols == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten()
+    
+    for idx, class_name in enumerate(classes):
+        if idx >= len(axes):
+            break
+        ax = axes[idx]
+        top = ko_by_class[class_name].most_common(10)
+        if not top:
+            continue
+        kos, counts = zip(*top)
+        bars = ax.barh(range(len(kos)), counts, color='#2E86AB')
+        ax.set_yticks(range(len(kos)))
+        ax.set_yticklabels(kos, fontsize=9)
+        ax.set_xlabel('Number of genes', fontsize=10)
+        ax.set_title(f'{class_name} - Top KOs', fontsize=11)
+        ax.invert_yaxis()
+        for i, (bar, count) in enumerate(zip(bars, counts)):
+            ax.text(count, bar.get_y()+bar.get_height()/2, f' {count}', va='center', fontsize=8)
+    
+    for idx in range(len(classes), len(axes)):
+        axes[idx].set_visible(False)
+    
+    plt.suptitle('Most Abundant KEGG Orthologs by Secondary Metabolite Class', fontsize=14, fontweight='bold')
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig(f"{output_prefix}_top_kos_by_class.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_top_kos_by_class.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_pathway_completeness(merged_data, output_prefix):
+    pathway_counts = Counter()
+    for gene, info in merged_data.items():
+        for pathway in info['secondary_pathways']:
+            pathway_counts[pathway] += 1
+    if not pathway_counts:
+        return
+    
+    pathways = list(pathway_counts.keys())
+    counts = [pathway_counts[p] for p in pathways]
+    names = [SECONDARY_PATHWAYS[p]['name'] for p in pathways]
+    colors = [SECONDARY_PATHWAYS[p]['color'] for p in pathways]
+    
+    fig, ax = plt.subplots(figsize=(14, max(6, len(pathways)*0.4)))
+    bars = ax.barh(range(len(pathways)), counts, color=colors, alpha=0.8)
+    ax.set_yticks(range(len(pathways)))
+    ax.set_yticklabels(names, fontsize=9)
+    ax.set_xlabel('Number of genes', fontsize=12, fontweight='bold')
+    ax.set_title('Genes Associated with Secondary Metabolism Pathways', fontsize=14, fontweight='bold')
+    
+    for bar, count in zip(bars, counts):
+        ax.text(count + 0.5, bar.get_y() + bar.get_height()/2, str(count), 
+                va='center', fontsize=9, fontweight='bold')
+    
+    ax.invert_yaxis()
+    ax.grid(True, axis='x', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_pathway_completeness.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_pathway_completeness.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_pie_chart_secondary_classes(merged_data, output_prefix):
+    class_counts = Counter()
+    for gene, info in merged_data.items():
+        for c in info['secondary_class']:
+            class_counts[c] += 1
+    if not class_counts:
+        return
+    
+    class_colors = {'Terpenoids':'#2E86AB', 'Phenylpropanoids':'#A23B72', 
+                    'Alkaloids':'#F18F01', 'Other':'#6A4E3A',
+                    'Glucosinolates':'#9B5DE5', 'Xanthines':'#F15BB5',
+                    'Cannabinoids':'#FF006E'}
+    colors = [class_colors.get(c, '#999999') for c in class_counts.keys()]
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7))
+    
+    # Pie chart com melhor espaçamento
+    wedges1, texts1, autotexts1 = ax1.pie(
+        class_counts.values(), 
+        labels=class_counts.keys(), 
+        colors=colors, 
+        autopct='%1.1f%%', 
+        startangle=90, 
+        explode=[0.05]*len(class_counts),
+        pctdistance=0.75,
+        labeldistance=1.1
+    )
+    ax1.set_title('Distribution by Metabolite Class', fontsize=12, fontweight='bold')
+    
+    # Donut chart
+    wedges2, texts2, autotexts2 = ax2.pie(
+        class_counts.values(), 
+        colors=colors, 
+        autopct='%1.1f%%', 
+        startangle=90, 
+        wedgeprops=dict(width=0.3),
+        pctdistance=0.7,
+        labeldistance=1.1
+    )
+    ax2.set_title('Donut View', fontsize=12, fontweight='bold')
+    ax2.legend(
+        wedges2, 
+        [f"{c} ({count})" for c, count in zip(class_counts.keys(), class_counts.values())],
+        title="Classes", 
+        loc="center left", 
+        bbox_to_anchor=(1.02, 0.5), 
+        fontsize=9
+    )
+    
+    plt.suptitle('Secondary Metabolism Gene Distribution', fontsize=14, fontweight='bold')
+    plt.tight_layout(rect=[0, 0, 0.90, 0.95])
+    plt.savefig(f"{output_prefix}_class_distribution.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_class_distribution.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_upset_venn(merged_data, output_prefix):
+    classes = ['Terpenoids','Phenylpropanoids','Alkaloids','Other','Glucosinolates','Xanthines','Cannabinoids']
+    classes = [c for c in classes if any(c in info['secondary_class'] for info in merged_data.values())]
+    if len(classes) < 2:
+        return
+    
+    matrix = []
+    for gene, info in merged_data.items():
+        row = [1 if c in info['secondary_class'] else 0 for c in classes]
+        if sum(row) > 0:
+            matrix.append(row)
+    if len(matrix) < 2:
+        return
+    
+    df_pres = pd.DataFrame(matrix, columns=classes)
+    combo_counts = {}
+    max_comb = min(4, len(classes))
+    for i in range(1, max_comb + 1):
+        for combo in combinations(classes, i):
+            mask = pd.Series([True]*len(df_pres))
+            for c in combo:
+                mask &= (df_pres[c]==1)
+            count = mask.sum()
+            if count > 0:
+                combo_counts[combo] = count
+    
+    sorted_combos = sorted(combo_counts.items(), key=lambda x: len(x[0]), reverse=False)
+    combos_names = ['∩'.join(c[0]) for c in sorted_combos]
+    counts = [c[1] for c in sorted_combos]
+    
+    fig, ax = plt.subplots(figsize=(max(10, len(combos_names)*0.6), 6))
+    bars = ax.bar(range(len(combos_names)), counts, color='#2E86AB', alpha=0.7)
+    ax.set_xticks(range(len(combos_names)))
+    ax.set_xticklabels(combos_names, rotation=45, ha='right', fontsize=8)
+    ax.set_ylabel('Number of genes', fontsize=12, fontweight='bold')
+    ax.set_title('Gene Overlap Between Metabolite Classes (UpSet-style)', fontsize=14, fontweight='bold')
+    
+    for bar, count in zip(bars, counts):
+        ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.5, 
+                str(count), ha='center', va='bottom', fontsize=9)
+    
+    ax.grid(True, axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_upset_venn.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_upset_venn.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_top_ec_numbers(merged_data, output_prefix):
+    ec_counter = Counter()
+    for gene, info in merged_data.items():
+        for ec in info['ec_numbers']:
+            ec_counter[ec] += 1
+    if not ec_counter:
+        return
+    
+    top = ec_counter.most_common(15)
+    ec_names, ec_counts = zip(*top)
+    
+    fig, ax = plt.subplots(figsize=(14, max(6, len(ec_names)*0.4)))
+    bars = ax.barh(range(len(ec_names)), ec_counts, color='#A23B72', alpha=0.8)
+    ax.set_yticks(range(len(ec_names)))
+    ax.set_yticklabels(ec_names, fontsize=8)
+    ax.set_xlabel('Number of genes', fontsize=12, fontweight='bold')
+    ax.set_title('Most Abundant EC Numbers in Secondary Metabolism', fontsize=14, fontweight='bold')
+    
+    for bar, count in zip(bars, ec_counts):
+        ax.text(count + 0.5, bar.get_y() + bar.get_height()/2, str(count), 
+                va='center', fontsize=9, fontweight='bold')
+    
+    ax.invert_yaxis()
+    ax.grid(True, axis='x', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_top_ec_numbers.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_top_ec_numbers.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_top_pfam_domains(merged_data, output_prefix):
+    pfam_counter = Counter()
+    for gene, info in merged_data.items():
+        for pfam in info['pfam_domains']:
+            if pfam in GENERIC_DOMAINS:
+                continue
+            pfam_counter[pfam] += 1
+    if not pfam_counter:
+        return
+    
+    top = pfam_counter.most_common(15)
+    pfam_names, pfam_counts = zip(*top)
+    
+    fig, ax = plt.subplots(figsize=(14, max(6, len(pfam_names)*0.4)))
+    bars = ax.barh(range(len(pfam_names)), pfam_counts, color='#F18F01', alpha=0.8)
+    ax.set_yticks(range(len(pfam_names)))
+    ax.set_yticklabels(pfam_names, fontsize=9)
+    ax.set_xlabel('Number of genes', fontsize=12, fontweight='bold')
+    ax.set_title('Most Abundant Core PFAM Domains in Secondary Metabolism', fontsize=14, fontweight='bold')
+    
+    for bar, count in zip(bars, pfam_counts):
+        ax.text(count + 0.5, bar.get_y() + bar.get_height()/2, str(count), 
+                va='center', fontsize=9, fontweight='bold')
+    
+    ax.invert_yaxis()
+    ax.grid(True, axis='x', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_top_core_pfam_domains.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_top_core_pfam_domains.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def generate_publication_table_secondary(merged_data, output_prefix):
+    rows = []
+    for gene, info in merged_data.items():
+        if info['secondary_pathways']:
+            rows.append({
+                'Gene_ID': gene,
+                'Source': ', '.join(info['source']),
+                'Description': info['description'][:100],
+                'COG_Category': info['cog_category'],
+                'Secondary_Classes': ', '.join(info['secondary_class']),
+                'Secondary_Pathways': ', '.join([f"{p} ({SECONDARY_PATHWAYS[p]['name']})" for p in info['secondary_pathways']]),
+                'KEGG_Orthologs': ', '.join(list(info['ko_numbers'])[:10]),
+                'EC_Numbers': ', '.join(list(info['ec_numbers'])[:10]),
+                'PFAM_Domains': ', '.join(list(info['pfam_domains'])[:10]),
+                'GO_Terms_Count': len(info['go_terms']),
+                'Pharma_Potential': info.get('pharma_potential', 'NONE'),
+                'Pharma_Score': info.get('pharma_score', 0)
+            })
+    if rows:
+        df = pd.DataFrame(rows)
+        df.to_csv(f"{output_prefix}_secondary_genes_table.csv", index=False)
+        try:
+            df.to_excel(f"{output_prefix}_secondary_genes_table.xlsx", index=False)
+        except:
+            pass
+        with open(f"{output_prefix}_statistics.txt", 'w') as f:
+            f.write("SECONDARY METABOLISM ANALYSIS - SUMMARY\n")
+            f.write(f"Total genes: {len(merged_data)}\n")
+            f.write(f"Secondary genes: {len(rows)}\n")
+            f.write(f"Percentage: {len(rows)/len(merged_data)*100:.1f}%\n")
+            class_summary = Counter()
+            for row in rows:
+                for c in row['Secondary_Classes'].split(', '):
+                    class_summary[c] += 1
+            f.write("\nGenes by class:\n")
+            for c, cnt in class_summary.most_common():
+                f.write(f"  {c}: {cnt}\n")
+            
+            pharma_genes = [g for g, info in merged_data.items() if info.get('pharma_score', 0) > 0]
+            f.write(f"\nPharmaceutical potential subset:\n")
+            f.write(f"  Total pharma genes: {len(pharma_genes)}\n")
+            f.write(f"  Percentage of secondary: {len(pharma_genes)/len(rows)*100:.1f}%\n")
+            
+            high = sum(1 for g in merged_data.values() if g.get('pharma_potential') == 'HIGH')
+            medium = sum(1 for g in merged_data.values() if g.get('pharma_potential') == 'MEDIUM')
+            low = sum(1 for g in merged_data.values() if g.get('pharma_potential') == 'LOW')
+            f.write(f"  HIGH: {high}\n")
+            f.write(f"  MEDIUM: {medium}\n")
+            f.write(f"  LOW: {low}\n")
+
+def plot_pharma_score_ranking(merged_data, output_prefix):
+    positive = {g: info for g, info in merged_data.items() if info.get('pharma_score', 0) > 0}
+    if not positive:
+        return
+    
+    sorted_genes = sorted(positive.items(), key=lambda x: x[1]['pharma_score'], reverse=True)[:20]
+    genes = [g[0] for g in sorted_genes]
+    scores = [g[1]['pharma_score'] for g in sorted_genes]
+    potentials = [g[1]['pharma_potential'] for g in sorted_genes]
+    colors = {'HIGH':'#2ECC71', 'MEDIUM':'#F39C12', 'LOW':'#E74C3C'}
+    bar_colors = [colors.get(p, '#95A5A6') for p in potentials]
+    
+    fig, ax = plt.subplots(figsize=(16, max(8, len(genes)*0.4)))
+    bars = ax.barh(range(len(genes)), scores, color=bar_colors, alpha=0.8)
+    ax.set_yticks(range(len(genes)))
+    ax.set_yticklabels(genes, fontsize=9)
+    ax.set_xlabel('Pharmaceutical Potential Score', fontsize=12, fontweight='bold')
+    ax.set_title('Top 20 Genes by Pharmaceutical & Nutraceutical Potential', fontsize=14, fontweight='bold')
+    
+    for bar, score, potential in zip(bars, scores, potentials):
+        ax.text(score + 0.5, bar.get_y() + bar.get_height()/2, 
+                f'{score} ({potential})', va='center', fontsize=10, fontweight='bold')
+    
+    legend_elements = [Patch(facecolor='#2ECC71', label='HIGH (≥10)'), 
+                       Patch(facecolor='#F39C12', label='MEDIUM (5-9)'), 
+                       Patch(facecolor='#E74C3C', label='LOW (1-4)')]
+    ax.legend(handles=legend_elements, loc='lower right', fontsize=10)
+    ax.invert_yaxis()
+    ax.grid(True, axis='x', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_pharma_score_ranking.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_pharma_score_ranking.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_compound_class_distribution(merged_data, output_prefix):
+    class_counts = defaultdict(int)
+    for gene, info in merged_data.items():
+        for cc in info.get('compound_classes', []):
+            class_counts[cc] += 1
+    if not class_counts:
+        return
+    
+    class_colors = {'Alkaloids':'#E63946','Terpenoids':'#2A9D8F','Phenylpropanoids':'#E9C46A',
+                    'Flavonoids':'#F4A261','Stilbenoids':'#E76F51','Glucosinolates':'#9B5DE5',
+                    'Xanthines':'#F15BB5','Antibiotics':'#00BBF9','Cannabinoids':'#FF006E','Other':'#CCCCCC'}
+    
+    classes = list(class_counts.keys())
+    counts = [class_counts[c] for c in classes]
+    colors = [class_colors.get(c, '#999999') for c in classes]
+    idx = np.argsort(counts)
+    classes = [classes[i] for i in idx]
+    counts = [counts[i] for i in idx]
+    colors = [colors[i] for i in idx]
+    
+    fig, ax = plt.subplots(figsize=(14, max(6, len(classes)*0.5)))
+    bars = ax.barh(classes, counts, color=colors, alpha=0.8)
+    ax.set_xlabel('Number of genes', fontsize=12, fontweight='bold')
+    ax.set_title('Distribution of Bioactive Compound Classes', fontsize=14, fontweight='bold')
+    
+    for bar, count in zip(bars, counts):
+        ax.text(count + 0.5, bar.get_y() + bar.get_height()/2, 
+                str(count), va='center', fontsize=10, fontweight='bold')
+    
+    ax.grid(True, axis='x', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_compound_class_distribution.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_compound_class_distribution.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_pharmaceutical_uses(merged_data, output_prefix):
+    uses_counter = Counter()
+    for gene, info in merged_data.items():
+        for use in info.get('pharma_uses', []):
+            uses_counter[use] += 1
+    if not uses_counter:
+        return
+    
+    top = uses_counter.most_common(15)
+    uses_names, uses_counts = zip(*top)
+    
+    fig, ax = plt.subplots(figsize=(14, max(6, len(uses_names)*0.4)))
+    bars = ax.barh(range(len(uses_names)), uses_counts, color='#9B5DE5', alpha=0.8)
+    ax.set_yticks(range(len(uses_names)))
+    ax.set_yticklabels(uses_names, fontsize=9)
+    ax.set_xlabel('Number of associated genes', fontsize=12, fontweight='bold')
+    ax.set_title('Predicted Pharmaceutical Applications', fontsize=14, fontweight='bold')
+    
+    for bar, count in zip(bars, uses_counts):
+        ax.text(count + 0.5, bar.get_y() + bar.get_height()/2, 
+                str(count), va='center', fontsize=9, fontweight='bold')
+    
+    ax.invert_yaxis()
+    ax.grid(True, axis='x', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_pharmaceutical_uses.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_pharmaceutical_uses.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_sunburst_hierarchical(merged_data, output_prefix):
+    pathway_class_counts = defaultdict(lambda: defaultdict(int))
+    for gene, info in merged_data.items():
+        for pathway in info['secondary_pathways']:
+            if pathway in PHARMA_DETAILS:
+                pc = PHARMA_DETAILS[pathway]['class']
+                pn = PHARMA_DETAILS[pathway]['name']
+                pathway_class_counts[pc][pn] += 1
+    if not pathway_class_counts:
+        return
+    
+    fig, ax = plt.subplots(figsize=(14, 8))
+    classes = list(pathway_class_counts.keys())
+    bottom = np.zeros(len(classes))
+    color_idx = 0
+    total_pathways = sum(len(pathway_class_counts[c]) for c in classes)
+    colors_pathways = plt.cm.Set3(np.linspace(0, 1, total_pathways))
+    
+    for i, class_name in enumerate(classes):
+        pathways = list(pathway_class_counts[class_name].keys())
+        counts = [pathway_class_counts[class_name][p] for p in pathways]
+        bars = ax.bar([class_name], [sum(counts)], bottom=bottom[i], 
+                      color=colors_pathways[color_idx:color_idx+len(pathways)], alpha=0.8)
+        bottom[i] += sum(counts)
+        color_idx += len(pathways)
+    
+    ax.set_ylabel('Number of genes', fontsize=12, fontweight='bold')
+    ax.set_title('Hierarchical Distribution of Bioactive Pathways', fontsize=14, fontweight='bold')
+    ax.grid(True, axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_sunburst_pharma.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_sunburst_pharma.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def plot_donut_chart_potential(merged_data, output_prefix):
+    potential_counts = Counter(info['pharma_potential'] for info in merged_data.values() 
+                              if info.get('pharma_potential', 'NONE') != 'NONE')
+    if not potential_counts:
+        return
+    
+    colors_donut = {'HIGH':'#2ECC71','MEDIUM':'#F39C12','LOW':'#E74C3C'}
+    colors = [colors_donut.get(p, '#95A5A6') for p in potential_counts.keys()]
+    labels = [f"{p}\n({count} genes)" for p, count in potential_counts.items()]
+    
+    fig, ax = plt.subplots(figsize=(10, 10))
+    wedges, texts, autotexts = ax.pie(potential_counts.values(), labels=labels, colors=colors, 
+                                      autopct='%1.1f%%', startangle=90, pctdistance=0.85, 
+                                      textprops={'fontsize':11, 'fontweight':'bold'})
+    centre_circle = Circle((0, 0), 0.70, fc='white', linewidth=2, edgecolor='black')
+    ax.add_artist(centre_circle)
+    total = sum(potential_counts.values())
+    ax.text(0, 0, f'Total\n{total}\ngenes', ha='center', va='center', 
+            fontsize=14, fontweight='bold')
+    ax.set_title('Distribution of Pharmaceutical Potential', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_donut_potential.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_donut_potential.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def build_functional_network(merged_data, output_prefix, min_edge_weight=1, max_nodes=15, selection_method='enrichment'):
+    pharma_genes = {g: info for g, info in merged_data.items() if info.get('pharma_score', 0) > 0}
+    if len(pharma_genes) < 2:
+        return
+    
+    if selection_method == 'score':
+        selected = sorted(pharma_genes.keys(), key=lambda x: pharma_genes[x]['pharma_score'], reverse=True)[:max_nodes]
+    elif selection_method == 'enrichment':
+        importance = {}
+        for gene, info in pharma_genes.items():
+            score = info['pharma_score']
+            n_kos = len(info['ko_numbers'])
+            n_pathways = len(info['secondary_pathways'])
+            n_pfams = len([p for p in info['pfam_domains'] if p not in GENERIC_DOMAINS])
+            importance[gene] = (score*2) + (n_kos*3) + n_pathways + (n_pfams*0.5)
+        selected = sorted(importance.keys(), key=lambda x: importance[x], reverse=True)[:max_nodes]
+    else:
+        class_genes = defaultdict(list)
+        for gene, info in pharma_genes.items():
+            for cc in info.get('compound_classes', []):
+                if cc:
+                    class_genes[cc].append((gene, info['pharma_score']))
+        selected = []
+        for cc, genes in class_genes.items():
+            selected.extend([g[0] for g in sorted(genes, key=lambda x: x[1], reverse=True)[:3]])
+        if len(selected) < max_nodes:
+            remaining = [g for g in pharma_genes.keys() if g not in selected]
+            selected.extend(sorted(remaining, key=lambda x: pharma_genes[x]['pharma_score'], reverse=True)[:max_nodes-len(selected)])
+        selected = selected[:max_nodes]
+    
+    edges = []
+    for i, g1 in enumerate(selected):
+        for g2 in selected[i+1:]:
+            shared_pathways = len(set(merged_data[g1]['secondary_pathways']) & set(merged_data[g2]['secondary_pathways']))
+            shared_go = len(set(merged_data[g1]['go_terms']) & set(merged_data[g2]['go_terms']))
+            shared_kos = len(set(merged_data[g1]['ko_numbers']) & set(merged_data[g2]['ko_numbers']))
+            total_sim = (shared_pathways*2) + shared_go + (shared_kos*3)
+            if total_sim >= min_edge_weight:
+                edges.append({
+                    'gene1': g1, 'gene2': g2,
+                    'shared_pathways': shared_pathways,
+                    'shared_go': shared_go,
+                    'shared_kos': shared_kos,
+                    'similarity_score': total_sim
+                })
+    
+    if edges:
+        df_edges = pd.DataFrame(edges)
+        df_edges.to_csv(f"{output_prefix}_functional_network.csv", index=False)
+        plot_functional_network(merged_data, selected, df_edges, output_prefix)
+
+def plot_functional_network(merged_data, genes_list, edges_df, output_prefix):
+    potential_colors = {'HIGH':'#2ECC71','MEDIUM':'#F39C12','LOW':'#E74C3C','NONE':'#95A5A6'}
+    n_nodes = len(genes_list)
+    angles = np.linspace(0, 2*np.pi, n_nodes, endpoint=False)
+    pos = {gene: (np.cos(angle), np.sin(angle)) for gene, angle in zip(genes_list, angles)}
+    
+    fig, ax = plt.subplots(figsize=(14, 12))
+    
+    if len(edges_df) > 0:
+        max_sim = edges_df['similarity_score'].max() or 1
+        for _, edge in edges_df.iterrows():
+            g1, g2 = edge['gene1'], edge['gene2']
+            if g1 in pos and g2 in pos:
+                x1, y1 = pos[g1]
+                x2, y2 = pos[g2]
+                weight = edge['similarity_score'] / max_sim
+                lw = 0.5 + weight*4
+                ax.plot([x1, x2], [y1, y2], '#3498DB', alpha=0.6, linewidth=lw, zorder=1)
+    
+    node_colors = [potential_colors.get(merged_data[gene]['pharma_potential'], '#95A5A6') for gene in genes_list]
+    node_sizes = [500 + merged_data[gene]['pharma_score']*80 for gene in genes_list]
+    node_sizes = [min(s, 1800) for s in node_sizes]
+    
+    x_coords = [pos[gene][0] for gene in genes_list]
+    y_coords = [pos[gene][1] for gene in genes_list]
+    ax.scatter(x_coords, y_coords, s=node_sizes, c=node_colors, alpha=0.85, 
+               edgecolors='black', linewidth=1.5, zorder=2)
+    
+    for gene in genes_list:
+        x, y = pos[gene]
+        label = gene if len(gene) <= 25 else gene[:22]+'...'
+        ax.annotate(label, (x, y), xytext=(0, 0), textcoords='offset points', 
+                    ha='center', va='center', fontsize=9, fontweight='bold',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.85))
+    
+    ax.set_title('Functional Network of Pharmaceutical Potential Genes', fontsize=14, fontweight='bold')
+    ax.set_xlim(-1.3, 1.3)
+    ax.set_ylim(-1.3, 1.3)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    
+    legend_elements = [Patch(facecolor='#2ECC71', label='HIGH'), 
+                       Patch(facecolor='#F39C12', label='MEDIUM'), 
+                       Patch(facecolor='#E74C3C', label='LOW')]
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=10)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_functional_network.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_functional_network.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def predict_novel_compounds(merged_data, output_prefix):
+    compound_pfam_map = {
+        'Flavonoids': {'pfams':['PF00195','PF02797','PF02458'], 'compounds':['naringenin','quercetin','kaempferol','anthocyanins'], 'confidence':0.85},
+        'Terpenoids': {'pfams':['PF03936','PF01397','PF00067'], 'compounds':['artemisinin','taxol','limonene','ginsenosides'], 'confidence':0.80},
+        'Alkaloids': {'pfams':['PF01596','PF00891','PF00248'], 'compounds':['morphine','codeine','berberine','caffeine'], 'confidence':0.70},
+        'Phenylpropanoids': {'pfams':['PF00195','PF00430'], 'compounds':['curcumin','resveratrol','lignin'], 'confidence':0.75},
+        'Carotenoids': {'pfams':['PF00514','PF06444'], 'compounds':['β-carotene','lycopene','astaxanthin'], 'confidence':0.80}
+    }
+    
+    predictions = []
+    for gene, info in merged_data.items():
+        if info.get('pharma_score', 0) == 0:
+            continue
+        gene_pfams = set(info['pfam_domains'])
+        predicted = []
+        for cc, data in compound_pfam_map.items():
+            required = set(data['pfams'])
+            matched = required & gene_pfams
+            if matched:
+                match_score = len(matched)/len(required)
+                conf = data['confidence'] * match_score
+                predicted.append({'class': cc, 'compounds': data['compounds'][0], 'confidence': conf})
+        if predicted:
+            max_conf = max([p['confidence'] for p in predicted])
+            predictions.append({
+                'gene': gene,
+                'pharma_score': info['pharma_score'],
+                'pharma_potential': info['pharma_potential'],
+                'predicted_compound_classes': ', '.join([p['class'] for p in predicted[:3]]),
+                'predicted_compounds': ', '.join([p['compounds'] for p in predicted[:3]]),
+                'max_confidence': round(max_conf, 3)
+            })
+    
+    if predictions:
+        df = pd.DataFrame(predictions)
+        df.to_csv(f"{output_prefix}_compound_predictions.csv", index=False)
+        
+        fig, ax = plt.subplots(figsize=(14, max(8, len(df.head(15))*0.4)))
+        top = df.head(15)
+        colors = {'HIGH':'#2ECC71','MEDIUM':'#F39C12','LOW':'#E74C3C'}
+        bar_colors = [colors.get(p, '#95A5A6') for p in top['pharma_potential']]
+        bars = ax.barh(range(len(top)), top['max_confidence'].values, color=bar_colors, alpha=0.8)
+        ax.set_yticks(range(len(top)))
+        ax.set_yticklabels(top['gene'].values, fontsize=9)
+        ax.set_xlabel('Prediction Confidence', fontsize=12, fontweight='bold')
+        ax.set_title('Top Predicted Compound-Producing Genes', fontsize=14, fontweight='bold')
+        
+        for bar, conf, compounds in zip(bars, top['max_confidence'].values, top['predicted_compounds'].values):
+            ax.text(conf + 0.02, bar.get_y() + bar.get_height()/2, 
+                    f'{conf:.0%} - {compounds[:40]}', va='center', fontsize=8)
+        
+        ax.set_xlim(0, 1)
+        ax.grid(True, axis='x', alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"{output_prefix}_compound_predictions.pdf", dpi=300, bbox_inches='tight')
+        plt.savefig(f"{output_prefix}_compound_predictions.png", dpi=300, bbox_inches='tight')
+        plt.close()
+
+def generate_publication_table_pharma(merged_data, output_prefix):
+    rows = []
+    for gene, info in merged_data.items():
+        if info.get('pharma_score', 0) > 0:
+            rows.append({
+                'Gene_ID': gene,
+                'Pharma_Potential': info['pharma_potential'],
+                'Pharma_Score': info['pharma_score'],
+                'Description': info['description'][:100],
+                'Compound_Classes': ', '.join(info.get('compound_classes', [])),
+                'Pharmaceutical_Uses': ', '.join(info.get('pharma_uses', [])[:3]),
+                'Pharma_Pathways': ', '.join(info.get('pharma_pathways', [])[:3]),
+                'KEGG_Orthologs': ', '.join(list(info['ko_numbers'])[:10]),
+                'EC_Numbers': ', '.join(list(info['ec_numbers'])[:5]),
+                'PFAM_Domains': ', '.join([p for p in list(info['pfam_domains'])[:5] if p not in GENERIC_DOMAINS])
+            })
+    
+    if rows:
+        df = pd.DataFrame(rows)
+        df.to_csv(f"{output_prefix}_pharma_genes_table.csv", index=False)
+        try:
+            df.to_excel(f"{output_prefix}_pharma_genes_table.xlsx", index=False)
+        except:
+            pass
+        
+        with open(f"{output_prefix}_pharma_statistics.txt", 'w') as f:
+            f.write("PHARMACEUTICAL AND NUTRACEUTICAL POTENTIAL ANALYSIS\n")
+            f.write(f"Total genes: {len(merged_data)}\n")
+            
+            secondary_genes = sum(1 for g in merged_data.values() if g['secondary_pathways'])
+            f.write(f"Secondary metabolism genes: {secondary_genes}\n")
+            f.write(f"  Percentage of total: {secondary_genes/len(merged_data)*100:.1f}%\n")
+            
+            pharma_genes = len(rows)
+            f.write(f"\nGenes with pharmaceutical potential: {pharma_genes}\n")
+            f.write(f"  Percentage of secondary genes: {pharma_genes/secondary_genes*100:.1f}%\n")
+            
+            potential_counts = Counter([r['Pharma_Potential'] for r in rows])
+            for level in ['HIGH','MEDIUM','LOW']:
+                f.write(f"  {level}: {potential_counts.get(level, 0)} genes\n")
+            
+            class_counter = Counter()
+            for row in rows:
+                for c in row['Compound_Classes'].split(', '):
+                    if c:
+                        class_counter[c] += 1
+            f.write("\nCompound classes:\n")
+            for c, cnt in class_counter.most_common():
+                f.write(f"  {c}: {cnt}\n")
+
+# ============================================================================
+# FUNÇÃO PARA ANÁLISE DE COMPLETUDE DE ROTAS
+# ============================================================================
+
+def analyze_pathway_completeness(merged_data, output_prefix):
+    pathway_genes = defaultdict(list)
+    for gene, info in merged_data.items():
+        for pathway in info['secondary_pathways']:
+            if pathway in SECONDARY_PATHWAYS:
+                pathway_genes[pathway].append(gene)
+    
+    results = []
+    for pathway, genes in pathway_genes.items():
+        pathway_info = SECONDARY_PATHWAYS.get(pathway, {})
+        results.append({
+            'pathway_id': pathway,
+            'pathway_name': pathway_info.get('name', pathway),
+            'class': pathway_info.get('class', 'Unknown'),
+            'gene_count': len(genes),
+            'pharma_score_sum': sum(merged_data[g].get('pharma_score', 0) for g in genes),
+            'high_genes': sum(1 for g in genes if merged_data[g].get('pharma_potential') == 'HIGH'),
+            'medium_genes': sum(1 for g in genes if merged_data[g].get('pharma_potential') == 'MEDIUM'),
+            'avg_pharma_score': round(sum(merged_data[g].get('pharma_score', 0) for g in genes) / len(genes), 2) if genes else 0
+        })
+    
+    if results:
+        df = pd.DataFrame(results)
+        df = df.sort_values('pharma_score_sum', ascending=False)
+        df.to_csv(f"{output_prefix}_pathway_completeness_analysis.csv", index=False)
+        
+        fig, ax = plt.subplots(figsize=(14, max(6, len(df)*0.3)))
+        top_pathways = df.head(20)
+        bars = ax.barh(range(len(top_pathways)), top_pathways['gene_count'].values, 
+                       color='#2E86AB', alpha=0.7)
+        ax.set_yticks(range(len(top_pathways)))
+        ax.set_yticklabels(top_pathways['pathway_name'].values, fontsize=9)
+        ax.set_xlabel('Number of genes', fontsize=12, fontweight='bold')
+        ax.set_title('Top Pathways by Gene Count', fontsize=14, fontweight='bold')
+        
+        for bar, count in zip(bars, top_pathways['gene_count'].values):
+            ax.text(count + 0.5, bar.get_y() + bar.get_height()/2, str(count), 
+                    va='center', fontsize=9, fontweight='bold')
+        
+        ax.invert_yaxis()
+        ax.grid(True, axis='x', alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"{output_prefix}_pathway_completeness_analysis.pdf", dpi=300, bbox_inches='tight')
+        plt.savefig(f"{output_prefix}_pathway_completeness_analysis.png", dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"   ✅ Pathway completeness analysis salvo: {output_prefix}_pathway_completeness_analysis.csv")
+    
+    return df
+
+# ============================================================================
+# FUNÇÃO CORRIGIDA PARA CÁLCULO DE POTENCIAL FARMACOLÓGICO
+# ============================================================================
+
+def calculate_pharma_potential(merged_data, pharma_threshold=5):
+    pharma_scores = {}
+    
+    for gene, info in merged_data.items():
+        if not info['secondary_pathways']:
+            pharma_scores[gene] = {
+                'score': 0,
+                'potential': 'NONE',
+                'pharma_pathways': [],
+                'compound_classes': [],
+                'pharma_uses': []
+            }
+            continue
+        
+        score = 0
+        pathways_found = []
+        compound_classes = set()
+        pharma_uses = set()
+        
+        for pathway in info['secondary_pathways']:
+            if pathway in PHARMA_DETAILS:
+                score += 2
+                pathways_found.append(PHARMA_DETAILS[pathway]['name'])
+                compound_classes.add(PHARMA_DETAILS[pathway]['class'])
+                pharma_uses.add(PHARMA_DETAILS[pathway]['pharma_use'])
+        
+        if score == 0:
+            pharma_scores[gene] = {
+                'score': 0,
+                'potential': 'NONE',
+                'pharma_pathways': [],
+                'compound_classes': [],
+                'pharma_uses': []
+            }
+            continue
+        
+        for ko in info['ko_numbers']:
+            for category, ko_list in PHARMA_KOS.items():
+                if ko in ko_list:
+                    score += 3
+                    break
+        
+        for pfam in info['pfam_domains']:
+            if pfam in GENERIC_DOMAINS:
+                continue
+            for category, domain_list in CORE_PHARMA_DOMAINS.items():
+                if pfam in domain_list:
+                    score += 2
+                    break
+        
+        if score >= 10:
+            potential = "HIGH"
+        elif score >= pharma_threshold:
+            potential = "MEDIUM"
+        else:
+            potential = "LOW"
+        
+        pharma_scores[gene] = {
+            'score': score,
+            'potential': potential,
+            'pharma_pathways': list(set(pathways_found)),
+            'compound_classes': list(compound_classes),
+            'pharma_uses': list(pharma_uses)
+        }
+    
+    return pharma_scores
+
+# ============================================================================
+# FUNÇÃO CORRIGIDA PARA MERGE FARMACOLÓGICO
+# ============================================================================
+
+def merge_pharma_data(eggnog_data, interpro_data, pharma_threshold=5):
+    merged_temp = merge_annotation_data(eggnog_data, interpro_data, SECONDARY_PATHWAYS)
+    pharma_scores = calculate_pharma_potential(merged_temp, pharma_threshold)
+    
+    merged = {}
+    for gene in merged_temp:
+        merged[gene] = merged_temp[gene].copy()
+        merged[gene]['pharma_potential'] = pharma_scores.get(gene, {}).get('potential', 'NONE')
+        merged[gene]['pharma_score'] = pharma_scores.get(gene, {}).get('score', 0)
+        merged[gene]['pharma_pathways'] = pharma_scores.get(gene, {}).get('pharma_pathways', [])
+        merged[gene]['compound_classes'] = pharma_scores.get(gene, {}).get('compound_classes', [])
+        merged[gene]['pharma_uses'] = pharma_scores.get(gene, {}).get('pharma_uses', [])
+    
+    return merged
+
+# ============================================================================
+# FUNÇÕES COMPARATIVAS (MULTI-GENOME)
+# ============================================================================
+
+def create_comparative_dotplot(genomes_data, output_prefix, top_n=15):
+    all_enrichment = []
+    for species, merged in genomes_data.items():
+        high_medium_genes = [g for g, info in merged.items() 
+                            if info.get('pharma_potential') in ['HIGH', 'MEDIUM']]
+        background_genes = [g for g, info in merged.items() 
+                           if info.get('pharma_potential') in ['LOW', 'NONE']]
+        if len(high_medium_genes) < 2 or len(background_genes) < 2:
+            continue
+        df_enrich = calculate_enrichment(
+            high_medium_genes, background_genes, merged,
+            min_count=2, min_fold=1.0, filter_generic=True
+        )
+        if len(df_enrich) > 0:
+            df_enrich['species'] = species
+            all_enrichment.append(df_enrich)
+    
+    if not all_enrichment:
+        return
+    
+    df_all = pd.concat(all_enrichment, ignore_index=True)
+    df_all = df_all[df_all['significant']]
+    
+    if len(df_all) == 0:
+        return
+    
+    df_all.to_csv(f"{output_prefix}_comparative_combined_pfam_enrichment.csv", index=False)
+    
+    top_terms = df_all.sort_values('fold_enrichment', ascending=False).head(top_n)
+    
+    fig_height = max(6, len(top_terms) * 0.4)
+    fig, ax = plt.subplots(figsize=(14, fig_height))
+    
+    species_list = list(genomes_data.keys())
+    color_palette = plt.cm.Set3(np.linspace(0, 1, len(species_list)))
+    species_colors = {s: color_palette[i] for i, s in enumerate(species_list)}
+    colors = [species_colors.get(s, '#999999') for s in top_terms['species']]
+    unique_species = top_terms['species'].unique()
+    legend_elements = [Patch(facecolor=species_colors.get(s, '#999999'), label=s)
+                       for s in unique_species if s in species_colors]
+    
+    scatter = ax.scatter(
+        top_terms['fold_enrichment'],
+        top_terms['pfam_domain'],
+        s=top_terms['count_in_group'] * 15 + 30,
+        c=colors,
+        alpha=0.8,
+        edgecolors='black',
+        linewidth=0.5
+    )
+    
+    ax.set_xlabel('Fold Enrichment', fontsize=12, fontweight='bold')
+    ax.set_ylabel('PFAM Domain', fontsize=12, fontweight='bold')
+    ax.set_title('Enriched PFAM Domains in HIGH+MEDIUM Genes by Species\n(Compared to LOW+NONE Background)', 
+                 fontsize=14, fontweight='bold')
+    ax.axvline(x=1, color='red', linestyle='--', alpha=0.5, label='Fold = 1')
+    ax.legend(handles=legend_elements,
+             loc='center left',
+             bbox_to_anchor=(1.02, 0.5),
+             fontsize=10,
+             title='Species',
+             title_fontsize=11)
+    
+    plt.subplots_adjust(right=0.78)
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.savefig(f"{output_prefix}_comparative_combined_pfam_dotplot.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_comparative_combined_pfam_dotplot.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"   ✅ Comparative combined PFAM dotplot salvo: {output_prefix}_comparative_combined_pfam_dotplot.pdf")
+
+def create_pathway_presence_matrix(genomes_data, all_pathways, output_prefix):
+    species_list = list(genomes_data.keys())
+    pathways_list = sorted(list(all_pathways), key=lambda x: SECONDARY_PATHWAYS.get(x, {}).get('class','Z'))
+    
+    matrix = []
+    for pathway in pathways_list:
+        row = []
+        for species in species_list:
+            total_score = 0
+            count = 0
+            for gene, info in genomes_data[species].items():
+                if pathway in info['secondary_pathways']:
+                    total_score += info.get('pharma_score', 0)
+                    count += 1
+            avg_score = total_score / count if count > 0 else 0
+            row.append(avg_score)
+        matrix.append(row)
+    
+    pathway_names = [SECONDARY_PATHWAYS.get(p, {}).get('name', p)[:35] for p in pathways_list]
+    df = pd.DataFrame(matrix, index=pathway_names, columns=species_list)
+    
+    fig, ax = plt.subplots(figsize=(max(12, len(species_list)*2), max(8, len(pathways_list)*0.4)))
+    
+    cmap_white_red = sns.light_palette("#d62728", as_cmap=True, reverse=False)
+    
+    sns.heatmap(df, annot=True, fmt='.1f', cmap=cmap_white_red, linewidths=0.5, ax=ax, 
+                cbar_kws={'label':'Average Pharma Score per Pathway'})
+    ax.set_title('Pathway Scores Across Species\n(White = low score, Red = high score)', fontsize=14, fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_pathway_score_matrix.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_pathway_score_matrix.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    print(f"   ✅ Pathway score matrix salvo: {output_prefix}_pathway_score_matrix.pdf")
+
+def create_comparative_bar_chart(genomes_data, output_prefix):
+    species = list(genomes_data.keys())
+    high = [sum(1 for g in genomes_data[s].values() if g.get('pharma_potential') == 'HIGH') for s in species]
+    medium = [sum(1 for g in genomes_data[s].values() if g.get('pharma_potential') == 'MEDIUM') for s in species]
+    low = [sum(1 for g in genomes_data[s].values() if g.get('pharma_potential') == 'LOW') for s in species]
+    
+    fig, ax = plt.subplots(figsize=(14, max(6, len(species)*0.5)))
+    y = np.arange(len(species))
+    ax.barh(y, high, color='#2ECC71', label='HIGH')
+    ax.barh(y, medium, left=high, color='#F39C12', label='MEDIUM')
+    ax.barh(y, low, left=[h+m for h,m in zip(high,medium)], color='#E74C3C', label='LOW')
+    ax.set_yticks(y)
+    ax.set_yticklabels(species, fontsize=11)
+    ax.set_xlabel('Number of genes with pharmaceutical potential', fontsize=12, fontweight='bold')
+    ax.set_title('Comparative Pharmaceutical Potential Across Species', fontsize=14, fontweight='bold')
+    ax.legend(loc='lower right', fontsize=10)
+    ax.grid(True, axis='x', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_comparative_bars.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_comparative_bars.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_comparative_radar_chart(genomes_data, output_prefix):
+    from math import pi
+    metrics = ['Percent_Pharma_of_Secondary', 'Unique_Compound_Classes', 'Avg_Pharma_Score']
+    rows = []
+    for species, merged in genomes_data.items():
+        total = len(merged)
+        secondary = sum(1 for g in merged.values() if g['secondary_pathways'])
+        pharma = sum(1 for g in merged.values() if g.get('pharma_score', 0) > 0)
+        avg = sum(g.get('pharma_score', 0) for g in merged.values()) / pharma if pharma > 0 else 0
+        classes = set()
+        for g in merged.values():
+            classes.update(g.get('compound_classes', []))
+        rows.append({
+            'Species': species,
+            'Percent_Pharma_of_Secondary': pharma/secondary*100 if secondary > 0 else 0,
+            'Unique_Compound_Classes': len(classes),
+            'Avg_Pharma_Score': avg
+        })
+    df = pd.DataFrame(rows).set_index('Species')
+    df_norm = (df - df.min()) / (df.max() - df.min() + 1e-9)
+    angles = [n * 2*pi / len(metrics) for n in range(len(metrics))]
+    angles += angles[:1]
+    
+    fig, ax = plt.subplots(figsize=(12, 12), subplot_kw=dict(projection='polar'))
+    colors = plt.cm.Set3(np.linspace(0, 1, len(df_norm)))
+    for i, (species, row) in enumerate(df_norm.iterrows()):
+        values = row[metrics].tolist()
+        values += values[:1]
+        ax.plot(angles, values, 'o-', linewidth=2, label=species, color=colors[i])
+        ax.fill(angles, values, alpha=0.1, color=colors[i])
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(metrics, fontsize=10)
+    ax.set_ylim(0, 1)
+    ax.set_title('Multi-dimensional Comparison of Pharmaceutical Potential', fontsize=14, fontweight='bold')
+    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=9)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_comparative_radar.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_comparative_radar.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_heatmap_comparative(genomes_data, output_prefix):
+    species_list = list(genomes_data.keys())
+    all_classes = set()
+    class_scores = defaultdict(lambda: defaultdict(list))
+    for species, merged in genomes_data.items():
+        for gene, info in merged.items():
+            for cc in info.get('compound_classes', []):
+                if cc:
+                    all_classes.add(cc)
+                    class_scores[species][cc].append(info.get('pharma_score', 0))
+    all_classes = sorted(all_classes)
+    matrix = []
+    for species in species_list:
+        row = []
+        for cc in all_classes:
+            scores = class_scores[species].get(cc, [0])
+            row.append(np.mean(scores))
+        matrix.append(row)
+    df = pd.DataFrame(matrix, index=species_list, columns=all_classes)
+    
+    fig, ax = plt.subplots(figsize=(max(10, len(all_classes)*1.2), max(8, len(species_list)*0.8)))
+    
+    cmap_white_red = sns.light_palette("#d62728", as_cmap=True, reverse=False)
+    
+    sns.heatmap(df, annot=True, fmt='.1f', cmap=cmap_white_red, linewidths=0.5, ax=ax, 
+                cbar_kws={'label':'Average Pharma Score per Compound Class'})
+    ax.set_title('Average Pharmaceutical Score by Compound Class Across Species\n(White = low score, Red = high score)', fontsize=14, fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_class_score_heatmap.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_class_score_heatmap.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_species_similarity_network(genomes_data, output_prefix):
+    species_list = list(genomes_data.keys())
+    n = len(species_list)
+    if n < 2:
+        return
+    
+    rows = []
+    for species, merged in genomes_data.items():
+        total = len(merged)
+        secondary = sum(1 for g in merged.values() if g['secondary_pathways'])
+        pharma = sum(1 for g in merged.values() if g.get('pharma_score', 0) > 0)
+        high = sum(1 for g in merged.values() if g.get('pharma_potential') == 'HIGH')
+        classes = set()
+        for g in merged.values():
+            classes.update(g.get('compound_classes', []))
+        rows.append({'Species': species, 'Total': total, 'Secondary': secondary, 'Pharma': pharma, 'HIGH': high, 'Classes': len(classes)})
+    df = pd.DataFrame(rows)
+    
+    edges = []
+    for i in range(n):
+        for j in range(i+1, n):
+            diff_high = abs(df.iloc[i]['HIGH'] - df.iloc[j]['HIGH'])
+            diff_pct = abs(df.iloc[i]['Pharma']/df.iloc[i]['Secondary'] - df.iloc[j]['Pharma']/df.iloc[j]['Secondary']) if df.iloc[i]['Secondary']>0 and df.iloc[j]['Secondary']>0 else 1
+            diff_classes = abs(df.iloc[i]['Classes'] - df.iloc[j]['Classes'])
+            sim = 1 / (1 + diff_high*0.5 + diff_pct*0.3 + diff_classes*0.2)
+            if sim > 0.3:
+                edges.append({'species1': species_list[i], 'species2': species_list[j], 'similarity': sim})
+    if not edges:
+        return
+    
+    angles = np.linspace(0, 2*np.pi, n, endpoint=False)
+    pos = {species: (np.cos(angle), np.sin(angle)) for species, angle in zip(species_list, angles)}
+    
+    fig, ax = plt.subplots(figsize=(14, 12))
+    
+    for edge in edges:
+        x1, y1 = pos[edge['species1']]
+        x2, y2 = pos[edge['species2']]
+        lw = 1 + edge['similarity']*5
+        ax.plot([x1, x2], [y1, y2], '#3498DB', alpha=0.5, linewidth=lw, zorder=1)
+    
+    node_sizes = [1000 + df[df['Species']==s]['HIGH'].values[0]*80 for s in species_list]
+    node_sizes = [min(s, 3000) for s in node_sizes]
+    pcts = [df[df['Species']==s]['Pharma'].values[0]/df[df['Species']==s]['Secondary'].values[0]*100 if df[df['Species']==s]['Secondary'].values[0]>0 else 0 for s in species_list]
+    colors = ['#2ECC71' if p>5 else '#F39C12' if p>2 else '#E74C3C' for p in pcts]
+    
+    x_coords = [pos[s][0] for s in species_list]
+    y_coords = [pos[s][1] for s in species_list]
+    ax.scatter(x_coords, y_coords, s=node_sizes, c=colors, alpha=0.85, 
+               edgecolors='black', linewidth=2, zorder=2)
+    
+    for species in species_list:
+        x, y = pos[species]
+        ax.annotate(species, (x, y), xytext=(0, 0), textcoords='offset points', 
+                    ha='center', va='center', fontsize=10, fontweight='bold',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.85))
+    
+    ax.set_title('Species Similarity Network', fontsize=14, fontweight='bold')
+    ax.set_xlim(-1.5, 1.5)
+    ax.set_ylim(-1.5, 1.5)
+    ax.set_aspect('equal')
+    ax.axis('off')
+    
+    legend_elements = [Patch(facecolor='#2ECC71', label='High potential (>5%)'), 
+                       Patch(facecolor='#F39C12', label='Medium (2-5%)'), 
+                       Patch(facecolor='#E74C3C', label='Low (<2%)')]
+    ax.legend(handles=legend_elements, loc='upper right', fontsize=10)
+    plt.tight_layout()
+    plt.savefig(f"{output_prefix}_species_network.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_species_network.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_ranking_table(genomes_data, output_prefix):
+    rows = []
+    for species, merged in genomes_data.items():
+        total = len(merged)
+        secondary = sum(1 for g in merged.values() if g['secondary_pathways'])
+        pharma = sum(1 for g in merged.values() if g.get('pharma_score', 0) > 0)
+        high = sum(1 for g in merged.values() if g.get('pharma_potential') == 'HIGH')
+        avg = sum(g.get('pharma_score', 0) for g in merged.values()) / pharma if pharma > 0 else 0
+        classes = set()
+        for g in merged.values():
+            classes.update(g.get('compound_classes', []))
+        rows.append({
+            'Species': species,
+            'Percent_Pharma_of_Secondary': pharma/secondary*100 if secondary > 0 else 0,
+            'HIGH': high,
+            'Classes': len(classes),
+            'Avg_Score': avg
+        })
+    df = pd.DataFrame(rows)
+    df.to_csv(f"{output_prefix}_ranking.csv", index=False)
+    
+    fig, axes = plt.subplots(2, 2, figsize=(16, 14))
+    axes = axes.flatten()
+    metrics = ['Percent_Pharma_of_Secondary','HIGH','Classes','Avg_Score']
+    for idx, metric in enumerate(metrics):
+        ax = axes[idx]
+        df_sorted = df.sort_values(metric, ascending=True).tail(10)
+        ax.barh(df_sorted['Species'], df_sorted[metric], color='#3498DB', alpha=0.8)
+        ax.set_xlabel(metric.replace('_',' '), fontsize=12, fontweight='bold')
+        ax.set_title(f'Ranking by {metric.replace("_"," ")}', fontsize=12, fontweight='bold')
+        ax.grid(True, axis='x', alpha=0.3)
+    plt.suptitle('Species Rankings by Pharmaceutical Potential Metrics', fontsize=14, fontweight='bold')
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.savefig(f"{output_prefix}_rankings.pdf", dpi=300, bbox_inches='tight')
+    plt.savefig(f"{output_prefix}_rankings.png", dpi=300, bbox_inches='tight')
+    plt.close()
+
+def create_comparative_summary_table(genomes_data, output_prefix):
+    rows = []
+    for species, merged in genomes_data.items():
+        total = len(merged)
+        secondary = sum(1 for g in merged.values() if g['secondary_pathways'])
+        pharma = sum(1 for g in merged.values() if g.get('pharma_score', 0) > 0)
+        high = sum(1 for g in merged.values() if g.get('pharma_potential') == 'HIGH')
+        medium = sum(1 for g in merged.values() if g.get('pharma_potential') == 'MEDIUM')
+        low = sum(1 for g in merged.values() if g.get('pharma_potential') == 'LOW')
+        total_score = sum(g.get('pharma_score', 0) for g in merged.values())
+        avg_score = total_score / pharma if pharma > 0 else 0
+        compound_classes = set()
+        for g in merged.values():
+            compound_classes.update(g.get('compound_classes', []))
+        rows.append({
+            'Species': species, 
+            'Total_Genes': total,
+            'Secondary_Genes': secondary,
+            'Pharma_Genes': pharma,
+            'Percent_Pharma_of_Secondary': round(pharma/secondary*100, 2) if secondary > 0 else 0,
+            'Percent_Pharma_of_Total': round(pharma/total*100, 2) if total > 0 else 0,
+            'HIGH': high, 
+            'MEDIUM': medium, 
+            'LOW': low,
+            'Avg_Pharma_Score': round(avg_score, 2),
+            'Unique_Compound_Classes': len(compound_classes)
+        })
+    df = pd.DataFrame(rows)
+    df.to_csv(f"{output_prefix}_comparative_summary.csv", index=False)
+    try:
+        df.to_excel(f"{output_prefix}_comparative_summary.xlsx", index=False)
+    except:
+        pass
+    return df
+
+def generate_comparative_report(genomes_data, output_prefix):
+    rows = []
+    for species, merged in genomes_data.items():
+        total = len(merged)
+        secondary = sum(1 for g in merged.values() if g['secondary_pathways'])
+        pharma = sum(1 for g in merged.values() if g.get('pharma_score', 0) > 0)
+        high = sum(1 for g in merged.values() if g.get('pharma_potential') == 'HIGH')
+        medium = sum(1 for g in merged.values() if g.get('pharma_potential') == 'MEDIUM')
+        low = sum(1 for g in merged.values() if g.get('pharma_potential') == 'LOW')
+        classes = set()
+        for g in merged.values():
+            classes.update(g.get('compound_classes', []))
+        rows.append({
+            'Species': species,
+            'Total': total,
+            'Secondary': secondary,
+            'Pharma': pharma,
+            'Percent_Pharma_of_Secondary': pharma/secondary*100 if secondary > 0 else 0,
+            'HIGH': high,
+            'MEDIUM': medium,
+            'LOW': low,
+            'Classes': len(classes)
+        })
+    df = pd.DataFrame(rows).sort_values('Percent_Pharma_of_Secondary', ascending=False)
+    
+    with open(f"{output_prefix}_comparative_report.txt", 'w') as f:
+        f.write("COMPARATIVE ANALYSIS OF PHARMACEUTICAL POTENTIAL ACROSS GENOMES\n")
+        f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Number of species: {len(df)}\n\n")
+        f.write("SPECIES RANKING (by % pharmaceutical genes relative to secondary):\n")
+        for i, (_, row) in enumerate(df.iterrows(), 1):
+            f.write(f"{i}. {row['Species']}: {row['Percent_Pharma_of_Secondary']:.2f}% (HIGH:{row['HIGH']}, MEDIUM:{row['MEDIUM']}, LOW:{row['LOW']})\n")
+        best = df.iloc[0]
+        f.write(f"\nBEST PERFORMER: {best['Species']}\n")
+        f.write(f"  • {best['Percent_Pharma_of_Secondary']:.2f}% of secondary genes have potential\n")
+        f.write(f"  • {best['HIGH']} HIGH potential genes\n")
+        f.write(f"  • {best['Classes']} compound classes\n")
+
+def process_multiple_genomes(eggnog_files, interpro_files, species_names, output_dir='pharma_multi_analysis', prefix='multi', threshold=5):
+    print(f"\n{'='*80}")
+    print("MULTI-GENOME COMPARATIVE PHARMA ANALYSIS")
+    print(f"{'='*80}")
+    os.makedirs(output_dir, exist_ok=True)
+    output_prefix = os.path.join(output_dir, prefix)
+    genomes_data = {}
+    all_pathways = set()
+    
+    for i, (eggnog_file, interpro_file, species) in enumerate(zip(eggnog_files, interpro_files, species_names)):
+        print(f"\nProcessing {species}...")
+        eggnog_data = parse_eggnog_universal(eggnog_file)
+        interpro_data = parse_interpro_universal(interpro_file) if interpro_file else {'genes':set(),'pfam_domains':defaultdict(set),'go_terms':defaultdict(set),'interpro_domains':defaultdict(set)}
+        merged = merge_pharma_data(eggnog_data, interpro_data, threshold)
+        genomes_data[species] = merged
+        for gene, info in merged.items():
+            all_pathways.update(info['secondary_pathways'])
+    
+    print("\n📊 Consistência por genoma:")
+    for species, merged in genomes_data.items():
+        secondary = sum(1 for g in merged.values() if g['secondary_pathways'])
+        pharma = sum(1 for g in merged.values() if g.get('pharma_score', 0) > 0)
+        status = "✅" if pharma <= secondary else "⚠️"
+        print(f"   {status} {species}: Secondary={secondary}, Pharma={pharma}")
+        validate_pharma_groups(merged)
+    
+    create_comparative_summary_table(genomes_data, output_prefix)
+    create_pathway_presence_matrix(genomes_data, all_pathways, output_prefix)
+    create_comparative_bar_chart(genomes_data, output_prefix)
+    create_comparative_radar_chart(genomes_data, output_prefix)
+    create_heatmap_comparative(genomes_data, output_prefix)
+    create_species_similarity_network(genomes_data, output_prefix)
+    create_ranking_table(genomes_data, output_prefix)
+    generate_comparative_report(genomes_data, output_prefix)
+    
+    print("\n📊 Gerando dotplots comparativos combinados...")
+    create_comparative_dotplot(genomes_data, output_prefix, top_n=15)
+    
+    print(f"\n✅ Multi-genome analysis completed. Outputs in: {output_dir}")
+    return True
+
+# ============================================================================
+# FUNÇÕES PRINCIPAIS
+# ============================================================================
+
+def run_secondary_analysis(eggnog_file, interpro_file, output_dir='secondary_metabolism', prefix='secondary'):
+    print(f"\n{'='*80}")
+    print("SECONDARY METABOLISM ANALYSIS")
+    print(f"{'='*80}")
+    print(f"Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    os.makedirs(output_dir, exist_ok=True)
+    output_prefix = os.path.join(output_dir, prefix)
+    
+    eggnog_data = parse_eggnog_universal(eggnog_file)
+    interpro_data = parse_interpro_universal(interpro_file)
+    
+    merged_data = merge_annotation_data(eggnog_data, interpro_data, SECONDARY_PATHWAYS)
+    
+    pharma_scores = calculate_pharma_potential(merged_data)
+    for gene in merged_data:
+        merged_data[gene]['pharma_potential'] = pharma_scores.get(gene, {}).get('potential', 'NONE')
+        merged_data[gene]['pharma_score'] = pharma_scores.get(gene, {}).get('score', 0)
+    
+    validate_pharma_groups(merged_data)
+    
+    create_heatmap_presence_absence(merged_data, output_prefix)
+    create_pharma_heatmap(merged_data, output_prefix)
+    
+    create_ko_dotplot(merged_data, output_prefix, top_n=15)
+    plot_top_kos_by_category(merged_data, output_prefix)
+    plot_pathway_completeness(merged_data, output_prefix)
+    plot_pie_chart_secondary_classes(merged_data, output_prefix)
+    plot_upset_venn(merged_data, output_prefix)
+    plot_top_ec_numbers(merged_data, output_prefix)
+    plot_top_pfam_domains(merged_data, output_prefix)
+    generate_publication_table_secondary(merged_data, output_prefix)
+    
+    analyze_pathway_completeness(merged_data, output_prefix)
+    
+    print("\n📊 Gerando dotplots de enriquecimento...")
+    create_pfam_dotplot_combined(merged_data, output_prefix, top_n=15)
+    
+    secondary_count = sum(1 for g in merged_data.values() if g['secondary_pathways'])
+    pharma_count = sum(1 for g in merged_data.values() if g.get('pharma_score', 0) > 0)
+    print(f"\n📊 Estatísticas de consistência:")
+    print(f"   Genes com metabolismo secundário: {secondary_count}")
+    print(f"   Genes com potencial farmacológico: {pharma_count}")
+    print(f"   Proporção farmacológico/secundário: {pharma_count/secondary_count*100:.1f}%")
+    if pharma_count <= secondary_count:
+        print("   ✅ CONSISTENTE: Pharma é subconjunto do Secondary")
+    else:
+        print("   ⚠️ INCONSISTENTE: Pharma > Secondary - verifique os dados")
+    
+    print(f"\n✅ Secondary metabolism analysis completed. Outputs in: {output_dir}")
+    return True
+
+def run_pharma_analysis(eggnog_file, interpro_file, output_dir='pharma_analysis', prefix='pharma', threshold=5, network_nodes=15, network_method='enrichment'):
+    print(f"\n{'='*80}")
+    print("PHARMACEUTICAL SECONDARY METABOLISM ANALYSIS")
+    print(f"{'='*80}")
+    print(f"Start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    os.makedirs(output_dir, exist_ok=True)
+    output_prefix = os.path.join(output_dir, prefix)
+    
+    eggnog_data = parse_eggnog_universal(eggnog_file)
+    interpro_data = parse_interpro_universal(interpro_file) if interpro_file else {'genes':set(),'pfam_domains':defaultdict(set),'go_terms':defaultdict(set),'interpro_domains':defaultdict(set)}
+    
+    merged_data = merge_pharma_data(eggnog_data, interpro_data, threshold)
+    
+    validate_pharma_groups(merged_data)
+    
+    secondary_count = sum(1 for g in merged_data.values() if g['secondary_pathways'])
+    pharma_count = sum(1 for g in merged_data.values() if g.get('pharma_score', 0) > 0)
+    
+    print(f"\n📊 Verificação de consistência:")
+    print(f"   Genes com metabolismo secundário: {secondary_count}")
+    print(f"   Genes com potencial farmacológico: {pharma_count}")
+    print(f"   Proporção farmacológico/secundário: {pharma_count/secondary_count*100:.1f}%")
+    
+    if pharma_count > secondary_count:
+        print("   ⚠️ ATENÇÃO: Pharma > Secondary - isso NÃO deveria acontecer!")
+    else:
+        print("   ✅ CONSISTENTE: Pharma é subconjunto do Secondary")
+    
+    create_heatmap_presence_absence(merged_data, output_prefix)
+    create_pharma_heatmap(merged_data, output_prefix)
+    
+    plot_pharma_score_ranking(merged_data, output_prefix)
+    plot_compound_class_distribution(merged_data, output_prefix)
+    plot_pharmaceutical_uses(merged_data, output_prefix)
+    plot_sunburst_hierarchical(merged_data, output_prefix)
+    plot_donut_chart_potential(merged_data, output_prefix)
+    build_functional_network(merged_data, output_prefix, min_edge_weight=1, max_nodes=network_nodes, selection_method=network_method)
+    predict_novel_compounds(merged_data, output_prefix)
+    generate_publication_table_pharma(merged_data, output_prefix)
+    
+    analyze_pathway_completeness(merged_data, output_prefix)
+    
+    print("\n📊 Gerando dotplots de enriquecimento combinado...")
+    create_pfam_dotplot_combined(merged_data, output_prefix, top_n=15)
+    
+    print(f"\n✅ Pharma analysis completed. Outputs in: {output_dir}")
+    return True
+
+def run_eggnog2kegg(eggnog_file, output_file, output_dir='eggnog2kegg_output', prefix='kegg'):
+    print(f"\n{'='*80}")
+    print("EGGNOG TO KEGG CONVERTER")
+    print(f"{'='*80}")
+    os.makedirs(output_dir, exist_ok=True)
+    out_path = os.path.join(output_dir, output_file)
+    parse_eggnog_annotation(eggnog_file, out_path)
+    print(f"\n✅ Eggnog to KEGG conversion completed. Output: {out_path}")
+    return True
+
+def parse_eggnog_annotation(eggnog_file, output_file):
+    results = []
+    total = 0
+    with_ko = 0
+    with open(eggnog_file, 'r') as f:
+        for line in f:
+            if line.startswith('##') or line.startswith('#'):
+                continue
+            fields = line.strip().split('\t')
+            if len(fields) < 12:
+                continue
+            query = fields[0]
+            kegg_ko = fields[11] if len(fields) > 11 else ''
+            total += 1
+            if kegg_ko and kegg_ko != '-' and kegg_ko != 'ko:' and kegg_ko != '':
+                matches = re.findall(r'ko:?(K\d{5})', kegg_ko)
+                if matches:
+                    for ko in matches:
+                        results.append(f"{query}\t{ko}")
+                        with_ko += 1
+                else:
+                    kos = re.findall(r'K\d{5}', kegg_ko)
+                    for ko in kos:
+                        results.append(f"{query}\t{ko}")
+                        with_ko += 1
+            else:
+                results.append(query)
+    with open(output_file, 'w') as f:
+        for line in results:
+            f.write(line + '\n')
+    print(f"Total genes: {total}, Genes with KO: {with_ko} ({with_ko/total*100:.2f}%)")
+
+# ============================================================================
+# INTERFACE GRÁFICA
+# ============================================================================
+
+class MetabAnalysisApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("AnnoMining - v2.2")
+        self.root.geometry("900x700")
+        self.root.resizable(True, True)
+        self.bg_color = "#ffffff"
+        self.fg_color = "#000000"
+        self.accent_color = "#2563eb"
+        self.button_bg = "#2563eb"
+        self.button_fg = "#ffffff"
+        self.entry_bg = "#f3f4f6"
+        self.tab_bg = "#ffffff"
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure('TNotebook', background='#ffffff', borderwidth=0)
+        style.configure('TNotebook.Tab', background='#f3f4f6', foreground='#1f2937',
+                        padding=[15, 8], font=('Segoe UI', 11, 'bold'))
+        style.map('TNotebook.Tab', background=[('selected', '#2563eb')],
+                  foreground=[('selected', 'white')])
+        style.configure('TFrame', background='#ffffff')
+        style.configure('TLabelframe', background='#ffffff', foreground='#1f2937')
+        style.configure('TLabelframe.Label', background='#ffffff', foreground='#1f2937')
+        main_frame = ttk.Frame(root, style='TFrame')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        title = tk.Label(main_frame, text="AnnoMining",
+                         font=('Segoe UI', 18, 'bold'), bg='#ffffff', fg='#1f2937')
+        title.pack(pady=10)
+        subtitle = tk.Label(main_frame, text="Platform for extracting and integrating functional annotation data",
+                            font=('Segoe UI', 10, 'bold'), bg='#ffffff', fg='#334e76')
+        subtitle.pack(pady=(0,5))
+        self.notebook = ttk.Notebook(main_frame)
+        self.notebook.pack(fill=tk.BOTH, expand=True)
+        self.create_secondary_tab()
+        self.create_pharma_tab()
+        self.create_pharma_multi_tab()
+        self.create_eggnog_tab()
+        footer = tk.Label(main_frame, text="Version 2.2",
+                          font=('Segoe UI', 9), bg='#ffffff', fg='#6b7280')
+        footer.pack(side=tk.BOTTOM, pady=5)
+
+    def create_secondary_tab(self):
+        tab = tk.Frame(self.notebook, bg='#ffffff')
+        self.notebook.add(tab, text="Secondary Metabolism")
+        container = tk.Frame(tab, bg='#ffffff', padx=20, pady=20)
+        container.pack(fill=tk.BOTH, expand=True)
+        tk.Label(container, text="Secondary Metabolism Analysis", font=('Segoe UI', 16, 'bold'),
+                 bg='#ffffff', fg='#1f2937').grid(row=0, column=0, columnspan=3, pady=(0, 20), sticky='w')
+        tk.Label(container, text="eggNOG annotations file (*.emapper.annotations):",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=1, column=0, sticky='e', padx=5, pady=8)
+        self.secondary_eggnog = tk.Entry(container, width=50, bg='#f3f4f6', fg='#1f2937',
+                                        relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.secondary_eggnog.grid(row=1, column=1, padx=5, pady=8)
+        tk.Button(container, text="📂 Browse", command=lambda: self.browse_file(self.secondary_eggnog),
+                  bg='#2563eb', fg='#ffffff', relief='flat', padx=15, pady=5,
+                  font=('Segoe UI', 10)).grid(row=1, column=2, padx=5)
+        tk.Label(container, text="InterProScan file (*.tsv):",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=2, column=0, sticky='e', padx=5, pady=8)
+        self.secondary_interpro = tk.Entry(container, width=50, bg='#f3f4f6', fg='#1f2937',
+                                          relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.secondary_interpro.grid(row=2, column=1, padx=5, pady=8)
+        tk.Button(container, text="📂 Browse", command=lambda: self.browse_file(self.secondary_interpro),
+                  bg='#2563eb', fg='#ffffff', relief='flat', padx=15, pady=5,
+                  font=('Segoe UI', 10)).grid(row=2, column=2, padx=5)
+        tk.Label(container, text="Output folder name:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=3, column=0, sticky='e', padx=5, pady=8)
+        self.secondary_outdir = tk.Entry(container, width=30, bg='#f3f4f6', fg='#1f2937',
+                                        relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.secondary_outdir.insert(0, "secondary_metabolism")
+        self.secondary_outdir.grid(row=3, column=1, sticky='w', padx=5, pady=8)
+        tk.Button(container, text="▶ Run Analysis", command=self.run_secondary,
+                  bg='#2563eb', fg='#ffffff', font=('Segoe UI', 12, 'bold'),
+                  relief='flat', padx=30, pady=8).grid(row=4, column=0, columnspan=3, pady=25)
+        self.secondary_log = scrolledtext.ScrolledText(container, height=10, bg='#1e293b', fg='#e2e8f0',
+                                                       font=('Consolas', 9), relief='flat')
+        self.secondary_log.grid(row=5, column=0, columnspan=3, padx=10, pady=10, sticky='we')
+        self.secondary_log.insert(tk.END, "Ready to run secondary metabolism analysis...\n")
+
+    def create_pharma_tab(self):
+        tab = tk.Frame(self.notebook, bg='#ffffff')
+        self.notebook.add(tab, text="Pharma Analysis")
+        container = tk.Frame(tab, bg='#ffffff', padx=20, pady=20)
+        container.pack(fill=tk.BOTH, expand=True)
+        tk.Label(container, text="Pharmaceutical & Nutraceutical Analysis (Single Genome)",
+                 font=('Segoe UI', 16, 'bold'), bg='#ffffff', fg='#1f2937').grid(row=0, column=0, columnspan=3, pady=(0, 20), sticky='w')
+        tk.Label(container, text="eggNOG annotations file:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=1, column=0, sticky='e', padx=5, pady=8)
+        self.pharma_eggnog = tk.Entry(container, width=50, bg='#f3f4f6', fg='#1f2937',
+                                      relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.pharma_eggnog.grid(row=1, column=1, padx=5, pady=8)
+        tk.Button(container, text="📂 Browse", command=lambda: self.browse_file(self.pharma_eggnog),
+                  bg='#2563eb', fg='#ffffff', relief='flat', padx=15, pady=5,
+                  font=('Segoe UI', 10)).grid(row=1, column=2)
+        tk.Label(container, text="InterProScan file (optional):",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=2, column=0, sticky='e', padx=5, pady=8)
+        self.pharma_interpro = tk.Entry(container, width=50, bg='#f3f4f6', fg='#1f2937',
+                                        relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.pharma_interpro.grid(row=2, column=1, padx=5, pady=8)
+        tk.Button(container, text="📂 Browse", command=lambda: self.browse_file(self.pharma_interpro),
+                  bg='#2563eb', fg='#ffffff', relief='flat', padx=15, pady=5,
+                  font=('Segoe UI', 10)).grid(row=2, column=2)
+        tk.Label(container, text="Threshold score:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=3, column=0, sticky='e', padx=5, pady=8)
+        self.pharma_threshold = tk.Entry(container, width=10, bg='#f3f4f6', fg='#1f2937',
+                                         relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.pharma_threshold.insert(0, "5")
+        self.pharma_threshold.grid(row=3, column=1, sticky='w', padx=5, pady=8)
+        tk.Label(container, text="Network nodes:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=4, column=0, sticky='e', padx=5, pady=8)
+        self.pharma_nodes = tk.Entry(container, width=10, bg='#f3f4f6', fg='#1f2937',
+                                     relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.pharma_nodes.insert(0, "15")
+        self.pharma_nodes.grid(row=4, column=1, sticky='w', padx=5, pady=8)
+        tk.Label(container, text="Network method:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=5, column=0, sticky='e', padx=5, pady=8)
+        self.pharma_method = ttk.Combobox(container, values=['score', 'enrichment', 'balanced'], width=15)
+        self.pharma_method.set('enrichment')
+        self.pharma_method.grid(row=5, column=1, sticky='w', padx=5, pady=8)
+        tk.Label(container, text="Output folder:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=6, column=0, sticky='e', padx=5, pady=8)
+        self.pharma_outdir = tk.Entry(container, width=30, bg='#f3f4f6', fg='#1f2937',
+                                      relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.pharma_outdir.insert(0, "pharma_analysis")
+        self.pharma_outdir.grid(row=6, column=1, sticky='w', padx=5, pady=8)
+        tk.Button(container, text="▶ Run Analysis", command=self.run_pharma,
+                  bg='#2563eb', fg='#ffffff', font=('Segoe UI', 12, 'bold'),
+                  relief='flat', padx=30, pady=8).grid(row=7, column=0, columnspan=3, pady=25)
+        self.pharma_log = scrolledtext.ScrolledText(container, height=10, bg='#1e293b', fg='#e2e8f0',
+                                                    font=('Consolas', 9), relief='flat')
+        self.pharma_log.grid(row=8, column=0, columnspan=3, padx=10, pady=10, sticky='we')
+        self.pharma_log.insert(tk.END, "Ready to run pharmaceutical analysis...\n")
+
+    def create_pharma_multi_tab(self):
+        tab = tk.Frame(self.notebook, bg='#ffffff')
+        self.notebook.add(tab, text="Pharma Multi")
+        container = tk.Frame(tab, bg='#ffffff', padx=20, pady=20)
+        container.pack(fill=tk.BOTH, expand=True)
+        tk.Label(container, text="Multi-Genome Comparative Pharma Analysis",
+                 font=('Segoe UI', 16, 'bold'), bg='#ffffff', fg='#1f2937').grid(row=0, column=0, columnspan=3, pady=(0, 20), sticky='w')
+        tk.Label(container, text="eggNOG files (comma-separated):",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=1, column=0, sticky='ne', padx=5, pady=8)
+        self.multi_eggnog = tk.Entry(container, width=50, bg='#f3f4f6', fg='#1f2937',
+                                     relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.multi_eggnog.grid(row=1, column=1, padx=5, pady=8)
+        tk.Button(container, text="📂 Browse multiple", command=lambda: self.browse_files(self.multi_eggnog),
+                  bg='#2563eb', fg='#ffffff', relief='flat', padx=15, pady=5,
+                  font=('Segoe UI', 10)).grid(row=1, column=2)
+        tk.Label(container, text="InterPro files (optional, comma-separated):",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=2, column=0, sticky='ne', padx=5, pady=8)
+        self.multi_interpro = tk.Entry(container, width=50, bg='#f3f4f6', fg='#1f2937',
+                                       relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.multi_interpro.grid(row=2, column=1, padx=5, pady=8)
+        tk.Button(container, text="📂 Browse multiple", command=lambda: self.browse_files(self.multi_interpro),
+                  bg='#2563eb', fg='#ffffff', relief='flat', padx=15, pady=5,
+                  font=('Segoe UI', 10)).grid(row=2, column=2)
+        tk.Label(container, text="Species names (comma-separated):",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=3, column=0, sticky='ne', padx=5, pady=8)
+        self.multi_names = tk.Entry(container, width=50, bg='#f3f4f6', fg='#1f2937',
+                                    relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.multi_names.insert(0, "Species1,Species2,Species3")
+        self.multi_names.grid(row=3, column=1, padx=5, pady=8)
+        tk.Label(container, text="Threshold:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=4, column=0, sticky='e', padx=5, pady=8)
+        self.multi_threshold = tk.Entry(container, width=10, bg='#f3f4f6', fg='#1f2937',
+                                        relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.multi_threshold.insert(0, "5")
+        self.multi_threshold.grid(row=4, column=1, sticky='w', padx=5, pady=8)
+        tk.Label(container, text="Output folder:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=5, column=0, sticky='e', padx=5, pady=8)
+        self.multi_outdir = tk.Entry(container, width=30, bg='#f3f4f6', fg='#1f2937',
+                                     relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.multi_outdir.insert(0, "pharma_multi_analysis")
+        self.multi_outdir.grid(row=5, column=1, sticky='w', padx=5, pady=8)
+        tk.Button(container, text="▶ Run Multi Analysis", command=self.run_pharma_multi,
+                  bg='#2563eb', fg='#ffffff', font=('Segoe UI', 12, 'bold'),
+                  relief='flat', padx=30, pady=8).grid(row=6, column=0, columnspan=3, pady=25)
+        self.multi_log = scrolledtext.ScrolledText(container, height=10, bg='#1e293b', fg='#e2e8f0',
+                                                   font=('Consolas', 9), relief='flat')
+        self.multi_log.grid(row=7, column=0, columnspan=3, padx=10, pady=10, sticky='we')
+        self.multi_log.insert(tk.END, "Ready to run multi-genome analysis...\n")
+
+    def create_eggnog_tab(self):
+        tab = tk.Frame(self.notebook, bg='#ffffff')
+        self.notebook.add(tab, text="eggnog2kegg")
+        container = tk.Frame(tab, bg='#ffffff', padx=20, pady=20)
+        container.pack(fill=tk.BOTH, expand=True)
+        tk.Label(container, text="eggnog2kegg Mapper Converter",
+                 font=('Segoe UI', 16, 'bold'), bg='#ffffff', fg='#1f2937').grid(row=0, column=0, columnspan=3, pady=(0, 20), sticky='w')
+        tk.Label(container, text="eggNOG annotations file:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=1, column=0, sticky='e', padx=5, pady=8)
+        self.eggnog2kegg_input = tk.Entry(container, width=50, bg='#f3f4f6', fg='#1f2937',
+                                          relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.eggnog2kegg_input.grid(row=1, column=1, padx=5, pady=8)
+        tk.Button(container, text="📂 Browse", command=lambda: self.browse_file(self.eggnog2kegg_input),
+                  bg='#2563eb', fg='#ffffff', relief='flat', padx=15, pady=5,
+                  font=('Segoe UI', 10)).grid(row=1, column=2)
+        tk.Label(container, text="Output file name:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=2, column=0, sticky='e', padx=5, pady=8)
+        self.eggnog2kegg_output = tk.Entry(container, width=30, bg='#f3f4f6', fg='#1f2937',
+                                           relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.eggnog2kegg_output.insert(0, "kegg_mapper.txt")
+        self.eggnog2kegg_output.grid(row=2, column=1, sticky='w', padx=5, pady=8)
+        tk.Label(container, text="Output folder:",
+                 bg='#ffffff', fg='#1f2937', font=('Segoe UI', 10)).grid(row=3, column=0, sticky='e', padx=5, pady=8)
+        self.eggnog2kegg_outdir = tk.Entry(container, width=30, bg='#f3f4f6', fg='#1f2937',
+                                           relief='flat', highlightthickness=1, highlightcolor='#2563eb')
+        self.eggnog2kegg_outdir.insert(0, "eggnog2kegg_output")
+        self.eggnog2kegg_outdir.grid(row=3, column=1, sticky='w', padx=5, pady=8)
+        tk.Button(container, text="▶ Convert", command=self.run_eggnog2kegg,
+                  bg='#2563eb', fg='#ffffff', font=('Segoe UI', 12, 'bold'),
+                  relief='flat', padx=30, pady=8).grid(row=4, column=0, columnspan=3, pady=25)
+        self.eggnog2kegg_log = scrolledtext.ScrolledText(container, height=10, bg='#1e293b', fg='#e2e8f0',
+                                                         font=('Consolas', 9), relief='flat')
+        self.eggnog2kegg_log.grid(row=5, column=0, columnspan=3, padx=10, pady=10, sticky='we')
+        self.eggnog2kegg_log.insert(tk.END, "Ready to convert eggNOG to KEGG format...\n")
+
+    def browse_file(self, entry_widget):
+        filename = filedialog.askopenfilename(title="Select file", filetypes=[("All files", "*.*")])
+        if filename:
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, filename)
+
+    def browse_files(self, entry_widget):
+        files = filedialog.askopenfilenames(title="Select files", filetypes=[("All files", "*.*")])
+        if files:
+            entry_widget.delete(0, tk.END)
+            entry_widget.insert(0, ",".join(files))
+
+    def log(self, widget, msg):
+        widget.insert(tk.END, msg + "\n")
+        widget.see(tk.END)
+
+    def run_secondary(self):
+        eggnog = self.secondary_eggnog.get().strip()
+        interpro = self.secondary_interpro.get().strip()
+        outdir = self.secondary_outdir.get().strip()
+        if not eggnog:
+            messagebox.showerror("Error", "Please select eggNOG file.")
+            return
+        if not os.path.exists(eggnog):
+            messagebox.showerror("Error", "eggNOG file not found.")
+            return
+        try:
+            self.log(self.secondary_log, "Starting secondary metabolism analysis...")
+            run_secondary_analysis(eggnog, interpro, output_dir=outdir, prefix="secondary")
+            self.log(self.secondary_log, f"✅ Analysis completed. Outputs in: {outdir}")
+            messagebox.showinfo("Success", f"Secondary metabolism analysis completed.\nOutputs in: {outdir}")
+        except Exception as e:
+            self.log(self.secondary_log, f"❌ Error: {e}")
+            messagebox.showerror("Error", str(e))
+
+    def run_pharma(self):
+        eggnog = self.pharma_eggnog.get().strip()
+        interpro = self.pharma_interpro.get().strip()
+        outdir = self.pharma_outdir.get().strip()
+        threshold = int(self.pharma_threshold.get().strip() or 5)
+        nodes = int(self.pharma_nodes.get().strip() or 15)
+        method = self.pharma_method.get().strip() or 'enrichment'
+        if not eggnog or not os.path.exists(eggnog):
+            messagebox.showerror("Error", "Invalid eggNOG file.")
+            return
+        try:
+            self.log(self.pharma_log, "Starting pharmaceutical analysis...")
+            run_pharma_analysis(eggnog, interpro, output_dir=outdir, prefix="pharma",
+                                threshold=threshold, network_nodes=nodes, network_method=method)
+            self.log(self.pharma_log, f"✅ Analysis completed. Outputs in: {outdir}")
+            messagebox.showinfo("Success", f"Pharma analysis completed.\nOutputs in: {outdir}")
+        except Exception as e:
+            self.log(self.pharma_log, f"❌ Error: {e}")
+            messagebox.showerror("Error", str(e))
+
+    def run_pharma_multi(self):
+        eggnog_str = self.multi_eggnog.get().strip()
+        interpro_str = self.multi_interpro.get().strip()
+        names_str = self.multi_names.get().strip()
+        outdir = self.multi_outdir.get().strip()
+        threshold = int(self.multi_threshold.get().strip() or 5)
+        if not eggnog_str or not names_str:
+            messagebox.showerror("Error", "Please provide eggNOG files and species names.")
+            return
+        eggnog_files = [f.strip() for f in eggnog_str.split(',') if f.strip()]
+        names = [n.strip() for n in names_str.split(',') if n.strip()]
+        interpro_files = [f.strip() for f in interpro_str.split(',') if f.strip()] if interpro_str else []
+        if len(eggnog_files) != len(names):
+            messagebox.showerror("Error", "Number of eggNOG files must match number of species names.")
+            return
+        if interpro_files and len(interpro_files) != len(names):
+            messagebox.showerror("Error", "If provided, number of InterPro files must match number of species.")
+            return
+        for f in eggnog_files:
+            if not os.path.exists(f):
+                messagebox.showerror("Error", f"File not found: {f}")
+                return
+        try:
+            self.log(self.multi_log, "Starting multi-genome analysis...")
+            interpro_list = interpro_files if interpro_files else [None]*len(names)
+            process_multiple_genomes(eggnog_files, interpro_list, names, output_dir=outdir, prefix="multi", threshold=threshold)
+            self.log(self.multi_log, f"✅ Multi-genome analysis completed. Outputs in: {outdir}")
+            messagebox.showinfo("Success", f"Multi-genome analysis completed.\nOutputs in: {outdir}")
+        except Exception as e:
+            self.log(self.multi_log, f"❌ Error: {e}")
+            messagebox.showerror("Error", str(e))
+
+    def run_eggnog2kegg(self):
+        infile = self.eggnog2kegg_input.get().strip()
+        outfile = self.eggnog2kegg_output.get().strip()
+        outdir = self.eggnog2kegg_outdir.get().strip()
+        if not infile or not os.path.exists(infile):
+            messagebox.showerror("Error", "Invalid input file.")
+            return
+        if not outfile:
+            outfile = "kegg_mapper.txt"
+        try:
+            self.log(self.eggnog2kegg_log, "Converting eggNOG to KEGG format...")
+            run_eggnog2kegg(infile, outfile, output_dir=outdir, prefix="kegg")
+            self.log(self.eggnog2kegg_log, f"✅ Conversion completed. Output: {os.path.join(outdir, outfile)}")
+            messagebox.showinfo("Success", f"Conversion completed.\nOutput: {os.path.join(outdir, outfile)}")
+        except Exception as e:
+            self.log(self.eggnog2kegg_log, f"❌ Error: {e}")
+            messagebox.showerror("Error", str(e))
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = MetabAnalysisApp(root)
+    root.mainloop()
