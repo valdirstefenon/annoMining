@@ -148,32 +148,59 @@ Output Files
 
 
 Conceptual Framework
+
 1.	Secondary Metabolism Classification: Genes are classified into seven major classes:
+
 o	Terpenoids (isoprenoid-based compounds)
+
 o	Phenylpropanoids (aromatic amino acid derivatives)
+
 o	Alkaloids (nitrogen-containing compounds)
+
 o	Glucosinolates (sulfur-containing compounds)
+
 o	Xanthines (purine alkaloids)
+
 o	Cannabinoids (terpenophenolic compounds)
+
 o	Other (miscellaneous secondary metabolites)
+
+
 2.	Pharmaceutical Potential Assessment: Each gene is scored based on:
+
 o	Presence in known pharmaceutical pathways (2 points per pathway)
+
 o	Association with pharmaceutically relevant KOs (3 points per KO)
+
 o	Co-occurrence with core PFAM domains (2 points per domain)
+
 o	Classification into HIGH (≥10), MEDIUM (5-9), LOW (1-4), or NONE (0)
+
+
 3.	Comparative Analysis: Multiple genomes are compared using:
+
 o	Average pharmaceutical scores per pathway
+
 o	Compound class diversity metrics
+
 o	Pathway completeness indices
+
 o	Network-based similarity metrics
+
+
 4.	PFAM Enrichment Analysis: Compares HIGH+MEDIUM genes against LOW+NONE background to identify significantly enriched domains
+
+
 5.	Pathway Completeness Analysis: Evaluates each pathway's gene count and pharmaceutical score distribution
 ________________________________________
  
 Input File Formats
+
 1. eggNOG-mapper Output
    
+
 AnnoMining accepts the standard eggNOG-mapper annotation file format (.emapper.annotations).
+
 
 Expected Format:
 
