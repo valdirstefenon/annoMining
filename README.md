@@ -43,39 +43,71 @@ Key Features
 ________________________________________
  
 Installation and Requirements
+
 System Requirements
+
 •	Operating System: Linux, macOS, or Windows (with Python 3.8+)
+
 •	Memory: 4GB RAM minimum (8GB+ recommended for large genomes)
+
 •	Disk Space: 1GB for software + space for output files
 
+
 Dependencies
+
 AnnoMining requires the following Python packages:
-text
+
+
 python >= 3.8
+
 pandas >= 1.3.0
+
 numpy >= 1.21.0
+
 matplotlib >= 3.4.0
+
 seaborn >= 0.11.0
+
 scipy >= 1.7.0
+
 statsmodels >= 0.12.0
+
 tkinter (typically included with Python)
 
+
 Installation
+
 Option 1: From GitHub
+
 bash
+
 git clone https://github.com/valdirstefenon/annoMining.git
+
 cd annomining
+
 pip install -r requirements.txt
-python annomining.py
-Option 2: Direct Download
-Download the annomining.py file and run with Python:
-bash
+
 python annomining.py
 
-Verifying Installation
-To verify that all dependencies are correctly installed, run:
+
+Option 2: Direct Download
+
+Download the annomining.py file and run with Python:
+
 bash
+
+python annomining.py
+
+
+
+Verifying Installation
+
+To verify that all dependencies are correctly installed, run:
+
+bash
+
 python -c "import pandas, numpy, matplotlib, seaborn, scipy, statsmodels; print('All dependencies OK')"
+
 ________________________________________
  
 Overview of Methodology
