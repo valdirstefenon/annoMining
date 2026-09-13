@@ -136,64 +136,64 @@ text
          ▼                 ▼                 ▼                   ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         MERGE ANNOTATION DATA                               │
-│  • Unify genes from all sources                                            │
-│  • Extract KEGG pathways, KOs, EC numbers, GO terms                        │
-│  • Collect PFAM domains                                                    │
+│  • Unify genes from all sources                                             │
+│  • Extract KEGG pathways, KOs, EC numbers, GO terms                         │
+│  • Collect PFAM domains                                                     │
 └─────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                         HMMER PROFILE SEARCH                                │
-│  • Extract proteins from GFF using gffread                                 │
-│  • Search against curated HMM profiles                                     │
-│  • Identify genes with secondary, pharma, or resistance domains            │
+│  • Extract proteins from GFF using gffread                                  │
+│  • Search against curated HMM profiles                                      │
+│  • Identify genes with secondary, pharma, or resistance domains             │
 └─────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    SECONDARY METABOLISM CLASSIFICATION                      │
-│  • Map KEGG pathways to secondary metabolism classes                       │
-│  • Classify genes by metabolite class                                      │
-│  • Integrate HMMER-detected genes                                          │
+│  • Map KEGG pathways to secondary metabolism classes                        │
+│  • Classify genes by metabolite class                                       │
+│  • Integrate HMMER-detected genes                                           │
 └─────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      PHARMACEUTICAL SCORING                                │
-│  • Score genes based on pathway, KO, and PFAM evidence                    │
-│  • Assign HIGH/MEDIUM/LOW/NONE classification                              │
-│  • Predict compound classes                                                │
+│                      PHARMACEUTICAL SCORING                                 │
+│  • Score genes based on pathway, KO, and PFAM evidence                      │
+│  • Assign HIGH/MEDIUM/LOW/NONE classification                               │
+│  • Predict compound classes                                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    DISEASE RESISTANCE SCORING  ✨ NEW                      │
-│  • Detect NLR, TIR-NLR, CC-NLR, TNJ genes                                 │
-│  • Score based on resistance domains and pathways                         │
-│  • Classify resistance gene architectures                                  │
+│                    DISEASE RESISTANCE SCORING                               │
+│  • Detect NLR, TIR-NLR, CC-NLR, TNJ genes                                   │
+│  • Score based on resistance domains and pathways                           │
+│  • Classify resistance gene architectures                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    VISUALIZATION & REPORTING                                │
-│  • Generate publication-ready figures                                      │
-│  • Create summary tables (CSV, Excel)                                      │
-│  • Produce statistics reports                                              │
-│  • Build functional networks                                               │
+│  • Generate publication-ready figures                                       │
+│  • Create summary tables (CSV, Excel)                                       │
+│  • Produce statistics reports                                               │
+│  • Build functional networks                                                │
 └─────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              OUTPUT FILES                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  • secondary_statistics.txt          • pharma_statistics.txt               │
-│  • secondary_genes_table.csv         • pharma_genes_table.csv              │
-│  • resistance_statistics.txt  ✨     • resistance_genes_table.csv ✨       │
-│  • *_combined_high_medium_pfam_dotplot.pdf                                 │
-│  • *_heatmap_scores.pdf              • *_pharma_heatmap_scores.pdf         │
-│  • functional_network.pdf            • resistance_network.pdf ✨           │
-│  • compound_predictions.csv          • tnj_analysis.txt ✨                 │
-│  • pathway_completeness_analysis.csv                                       │
+│  • secondary_statistics.txt          • pharma_statistics.txt                │
+│  • secondary_genes_table.csv         • pharma_genes_table.csv               │
+│  • resistance_statistics.txt         • resistance_genes_table.csv           │
+│  • *_combined_high_medium_pfam_dotplot.pdf                                  │
+│  • *_heatmap_scores.pdf              • *_pharma_heatmap_scores.pdf          │
+│  • functional_network.pdf            • resistance_network.pdf               │
+│  • compound_predictions.csv          • tnj_analysis.txt                     │
+│  • pathway_completeness_analysis.csv                                        │
 └─────────────────────────────────────────────────────────────────────────────┘
 System Requirements
 Minimum Hardware
@@ -346,8 +346,8 @@ File	Description
 *_statistics.txt	Summary statistics including total genes, secondary genes, class distribution
 *_secondary_genes_table.csv	Complete list of secondary metabolism genes with annotations
 *_pharma_genes_table.csv	Filtered list of genes with pharmaceutical potential
-*_resistance_statistics.txt	✨ Disease resistance summary statistics
-*_resistance_genes_table.csv	✨ Complete list of resistance genes with classifications
+*_resistance_statistics.txt	   Disease resistance summary statistics
+*_resistance_genes_table.csv	   Complete list of resistance genes with classifications
 Secondary Metabolism Visualizations
 File	Description
 *_combined_high_medium_pfam_dotplot.pdf	Dot plot showing enriched PFAM domains in HIGH+MEDIUM genes
@@ -359,26 +359,26 @@ File	Description
 *_pathway_completeness.pdf	Genes per pathway analysis
 *_functional_network.pdf	Network of functionally similar high-potential genes
 *_compound_predictions.pdf	Predicted compound classes based on domain architecture
-Disease Resistance Visualizations ✨ NEW
+Disease Resistance Visualizations 
 File	Description
 *_resistance_score_ranking.pdf	Top 20 genes by disease resistance potential
 *_resistance_class_distribution.pdf	Distribution of resistance gene classes (NLR, TNJ, etc.)
 *_resistance_pathway_completeness.pdf	Resistance pathway gene counts
 *_resistance_donut.pdf	Donut chart of resistance potential distribution
 *_resistance_network.pdf	Functional network of resistance genes
-*_tnj_analysis.txt	✨ Detailed TNJ gene analysis
-*_tnj_architectures.pdf	✨ TNJ gene architecture distribution
-*_tnj_confidence.pdf	✨ TNJ gene confidence levels
-*_resistance_pfam_dotplot.pdf	✨ Enriched PFAM domains in resistance genes
+*_tnj_analysis.txt	   Detailed TNJ gene analysis
+*_tnj_architectures.pdf	   TNJ gene architecture distribution
+*_tnj_confidence.pdf	   TNJ gene confidence levels
+*_resistance_pfam_dotplot.pdf	   Enriched PFAM domains in resistance genes
 Data Files
 File	Description
 *_pathway_completeness_analysis.csv	Detailed pathway statistics
 *_functional_network.csv	Edge list for functional network
 *_compound_predictions.csv	Compound predictions for high-scoring genes
 *_combined_pfam_category_summary.csv	Summary of enriched PFAM categories
-*_resistance_network.csv	✨ Resistance network edge list
-*_resistance_pfam_enrichment.csv	✨ Statistical enrichment of resistance PFAMs
-*_tnj_genes_table.csv	✨ Complete table of TNJ genes
+*_resistance_network.csv	   Resistance network edge list
+*_resistance_pfam_enrichment.csv	   Statistical enrichment of resistance PFAMs
+*_tnj_genes_table.csv	   Complete table of TNJ genes
 Using the Graphical Interface
 Launching the GUI
 bash
@@ -431,7 +431,7 @@ Network Method: Selection method (enrichment, score, or balanced)
 
 Run Analysis
 
-3. Disease Resistance Tab ✨ NEW
+3. Disease Resistance Tab
 For comprehensive disease resistance gene analysis.
 
 Steps:
@@ -490,7 +490,7 @@ python3 annoMining3.6.py --mode pharma \
     --threshold 4 \
     --nodes 15 \
     --method enrichment
-Disease Resistance Analysis ✨ NEW
+Disease Resistance Analysis
 bash
 python3 annoMining3.6.py --mode resistance \
     --eggnog eggnog.emapper.annotations \
@@ -542,7 +542,7 @@ LOW: Score ≥ 1 and < 4
 
 NONE: Score = 0
 
-Disease Resistance Scores ✨ NEW
+Disease Resistance Scores
 AnnoMining assigns resistance scores based on:
 
 Domain architecture (NLR, TIR, NB-ARC, LRR, Jacalin, etc.)
@@ -563,7 +563,7 @@ LOW: Score ≥ 1 and < 5
 
 NONE: Score = 0
 
-TNJ Gene Classification ✨ NEW
+TNJ Gene Classification 
 TNJ (TIR-NBS-Jacalin) genes are classified based on domain architecture:
 
 Architecture	Domains	Confidence
@@ -593,7 +593,7 @@ Pharmaceutical potential subset:
   HIGH: 4
   MEDIUM: 205
   LOW: 516
-Disease Resistance Example ✨ NEW:
+Disease Resistance Example:
 text
 DISEASE RESISTANCE GENE ANALYSIS
 Total genes: 29,698
@@ -754,7 +754,7 @@ AnnoMining is distributed under the MIT License.
 
 Version History
 Version	Date	Changes
-v3.6	Sep 2026	✨ Disease resistance module with TNJ detection
+v3.6	Sep 2026 Disease resistance module with TNJ detection
 v3.5	Aug 2026	Full GFF/HMMER integration
 v3.1	Aug 2026	HMMER support added
 v3.0	Jul 2026	Initial release
