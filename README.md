@@ -68,7 +68,7 @@ Predicts compound classes based on domain architecture
 
 Identifies genes with nutraceutical and therapeutic applications
 
-Disease Resistance Analysis ✨ NEW in v3.6
+Disease Resistance Analysis
 
 Comprehensive detection of NLR (Nucleotide-binding Leucine-rich Repeat) genes
 
