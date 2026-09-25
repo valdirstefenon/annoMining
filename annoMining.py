@@ -171,6 +171,7 @@ def find_hmm_file(hmm_file, hmm_dir):
             return c
     return None
 
+
 def check_executable(name):
     try:
         r = subprocess.run([name, '-h'], capture_output=True, text=True, timeout=10)
@@ -184,6 +185,7 @@ def check_executable(name):
         return False
     except Exception:
         return False
+
 
 def write_session_info(output_dir):
     import platform
@@ -209,7 +211,7 @@ def write_summary(output_dir, filename, header_lines, sections):
     path = os.path.join(output_dir, filename)
     with open(path, 'w') as f:
         f.write("=" * 78 + "\n")
-        f.write(f"annoMining - {filename.replace('_summary.txt','').upper()} SUMMARY\n")
+        f.write(f"annoMining - {filename.replace('_summary.txt', '').upper()} SUMMARY\n")
         f.write("=" * 78 + "\n")
         f.write(f"Generated: {datetime.now().isoformat()}\n")
         f.write("\n")
@@ -235,6 +237,20 @@ def write_summary(output_dir, filename, header_lines, sections):
                 f.write(f"{lines}\n")
             f.write("\n")
     return path
+
+
+def write_gene_table(output_dir, filename, rows, columns):
+    if not rows:
+        return None
+    df = pd.DataFrame(rows, columns=columns)
+    csv_path = os.path.join(output_dir, filename + '.csv')
+    df.to_csv(csv_path, index=False)
+    xlsx_path = os.path.join(output_dir, filename + '.xlsx')
+    try:
+        df.to_excel(xlsx_path, index=False)
+    except Exception:
+        xlsx_path = None
+    return csv_path, xlsx_path
 
 
 def parse_eggnog(eggnog_file):
@@ -626,7 +642,7 @@ def calculate_enrichment(group_genes, background_genes, merged_data,
             continue
         fg = cg / total_g
         fb = cb / total_b
-        fold = fg / fb if fb > 0 else np.inf        
+        fold = fg / fb if fb > 0 else np.inf
         if fold < min_fold:
             continue
         table = [[cg, total_g - cg], [cb, total_b - cb]]
@@ -1144,6 +1160,106 @@ def process_hmmer(gff, genome, hmm_dir, outdir, prefix, domains_dict, pathway_di
     return merged, hmmer_stats
 
 
+def generate_secondary_gene_table(merged, output_dir):
+    genes = [g for g, i in merged.items() if i['secondary_pathways']]
+    if not genes:
+        return None
+    genes.sort(key=lambda x: len(merged[x]['secondary_pathways']), reverse=True)
+    columns = ['Gene_ID', 'Description', 'Preferred_Name', 'COG_Category',
+               'Secondary_Classes', 'Secondary_Pathways',
+               'KEGG_Orthologs', 'EC_Numbers', 'PFAM_Domains',
+               'GO_Terms_Count', 'Sources', 'HMMER_Classes']
+    rows = []
+    for g in genes:
+        info = merged[g]
+        rows.append([
+            g,
+            info['description'][:200],
+            info.get('preferred_name', ''),
+            info.get('cog_category', '-'),
+            ';'.join(sorted(info['secondary_class'])),
+            ';'.join(sorted(info['secondary_pathways'])),
+            ';'.join(sorted(info['ko_numbers'])[:20]),
+            ';'.join(sorted(info['ec_numbers'])[:20]),
+            ';'.join(sorted([p for p in info['pfam_domains'] if p not in GENERIC_DOMAINS])[:20]),
+            len(info['go_terms']),
+            ';'.join(info['source']),
+            ';'.join(sorted(info['hmmer_classes'])),
+        ])
+    return write_gene_table(output_dir, 'secondary_genes_table', rows, columns)
+
+
+def generate_pharma_gene_table(merged, output_dir):
+    genes = [g for g, i in merged.items() if i.get('pharma_score', 0) > 0]
+    if not genes:
+        return None
+    genes.sort(key=lambda x: merged[x]['pharma_score'], reverse=True)
+    columns = ['Gene_ID', 'Description', 'Preferred_Name', 'COG_Category',
+               'Pharma_Score', 'Pharma_Potential',
+               'Compound_Classes', 'Pharma_Uses', 'Pharma_Pathways',
+               'Secondary_Pathways', 'KEGG_Orthologs', 'EC_Numbers',
+               'PFAM_Domains', 'GO_Terms_Count', 'Sources', 'HMMER_Classes']
+    rows = []
+    for g in genes:
+        info = merged[g]
+        rows.append([
+            g,
+            info['description'][:200],
+            info.get('preferred_name', ''),
+            info.get('cog_category', '-'),
+            info['pharma_score'],
+            info['pharma_potential'],
+            ';'.join(sorted(info.get('compound_classes', []))),
+            ';'.join(sorted(info.get('pharma_uses', []))),
+            ';'.join(sorted(info.get('pharma_pathways', []))),
+            ';'.join(sorted(info['secondary_pathways'])),
+            ';'.join(sorted(info['ko_numbers'])[:20]),
+            ';'.join(sorted(info['ec_numbers'])[:20]),
+            ';'.join(sorted([p for p in info['pfam_domains'] if p not in GENERIC_DOMAINS])[:20]),
+            len(info['go_terms']),
+            ';'.join(info['source']),
+            ';'.join(sorted(info['hmmer_classes'])),
+        ])
+    return write_gene_table(output_dir, 'pharma_genes_table', rows, columns)
+
+
+def generate_resistance_gene_table(merged, output_dir):
+    genes = [g for g, i in merged.items() if i.get('resistance_score', 0) > 0]
+    if not genes:
+        return None
+    genes.sort(key=lambda x: merged[x]['resistance_score'], reverse=True)
+    columns = ['Gene_ID', 'Description', 'Preferred_Name', 'COG_Category',
+               'Resistance_Score', 'Resistance_Potential',
+               'TNJ_Detected', 'TNJ_Architecture', 'TNJ_Confidence',
+               'Resistance_Classes', 'Resistance_Pathways', 'Resistance_PFAMs',
+               'KEGG_Orthologs', 'EC_Numbers', 'PFAM_Domains',
+               'GO_Terms_Count', 'Sources', 'HMMER_Classes']
+    rows = []
+    for g in genes:
+        info = merged[g]
+        rows.append([
+            g,
+            info['description'][:200],
+            info.get('preferred_name', ''),
+            info.get('cog_category', '-'),
+            info['resistance_score'],
+            info['resistance_potential'],
+            info.get('tnj_detected', False),
+            info.get('tnj_architecture', ''),
+            info.get('tnj_confidence', 'NONE'),
+            ';'.join(sorted(info.get('resistance_classes', []))),
+            ';'.join(sorted(info.get('resistance_pathways', []))),
+            ';'.join(sorted(info.get('resistance_pfams', []))),
+            ';'.join(sorted(info['ko_numbers'])[:20]),
+            ';'.join(sorted(info['ec_numbers'])[:20]),
+            ';'.join(sorted([p for p in info['pfam_domains'] if p not in GENERIC_DOMAINS])[:20]),
+            len(info['go_terms']),
+            ';'.join(info['source']),
+            ';'.join(sorted(info['hmmer_classes'])),
+        ])
+    return write_gene_table(output_dir, 'resistance_genes_table', rows, columns)
+
+
 def summarize_secondary(merged, hmmer_stats, output_dir):
     total_genes = len(merged)
     sec_genes = [g for g, i in merged.items() if i['secondary_pathways']]
@@ -1299,7 +1415,11 @@ def run_secondary_analysis(eggnog_file, interpro_file, gff_file, genome_file, hm
     plot_top_ec(merged, prefix)
     plot_top_pfam(merged, prefix)
     summary_path = summarize_secondary(merged, hmmer_stats, output_dir)
-    print(f"Secondary analysis: {len(merged)} genes, summary: {summary_path}")
+    table = generate_secondary_gene_table(merged, output_dir)
+    print(f"Secondary analysis: {len(merged)} genes")
+    print(f"  Summary: {summary_path}")
+    if table:
+        print(f"  Gene table: {table[0]}")
 
 
 def run_pharma_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_dir, output_dir,
@@ -1346,6 +1466,7 @@ def run_pharma_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_d
                                     'Enriched PFAMs in HIGH+MEDIUM Pharma Genes',
                                     'pathway_category', cat_colors)
     summary_path = summarize_pharma(merged, hmmer_stats, output_dir, threshold)
+    table = generate_pharma_gene_table(merged, output_dir)
     if enrichment_df is not None and len(enrichment_df) > 0:
         with open(summary_path, 'a') as f:
             f.write("\n" + "-" * 78 + "\n")
@@ -1357,7 +1478,10 @@ def run_pharma_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_d
                 f.write(f"  {row['pfam_domain']}\tfold={row['fold_enrichment']}\t"
                         f"count_group={row['count_in_group']}\t"
                         f"p_adj={row['p_adjust']:.2e}\n")
-    print(f"Pharma analysis: {len(merged)} genes, summary: {summary_path}")
+    print(f"Pharma analysis: {len(merged)} genes")
+    print(f"  Summary: {summary_path}")
+    if table:
+        print(f"  Gene table: {table[0]}")
 
 
 def run_resistance_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_dir, output_dir,
@@ -1403,6 +1527,7 @@ def run_resistance_analysis(eggnog_file, interpro_file, gff_file, genome_file, h
                                     'Enriched PFAMs in HIGH+MEDIUM Resistance Genes',
                                     'pathway_category', colors)
     summary_path = summarize_resistance(merged, hmmer_stats, output_dir, threshold)
+    table = generate_resistance_gene_table(merged, output_dir)
     if enrichment_df is not None and len(enrichment_df) > 0:
         with open(summary_path, 'a') as f:
             f.write("\n" + "-" * 78 + "\n")
@@ -1414,7 +1539,10 @@ def run_resistance_analysis(eggnog_file, interpro_file, gff_file, genome_file, h
                 f.write(f"  {row['pfam_domain']}\tfold={row['fold_enrichment']}\t"
                         f"count_group={row['count_in_group']}\t"
                         f"p_adj={row['p_adjust']:.2e}\n")
-    print(f"Resistance analysis: {len(merged)} genes, summary: {summary_path}")
+    print(f"Resistance analysis: {len(merged)} genes")
+    print(f"  Summary: {summary_path}")
+    if table:
+        print(f"  Gene table: {table[0]}")
 
 
 def run_eggnog2kegg(eggnog_file, output_file, output_dir):
@@ -1438,7 +1566,7 @@ def run_eggnog2kegg(eggnog_file, output_file, output_dir):
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("annoMining v4.0")
+        self.root.title("annoMining v4.1")
         self.root.geometry("1050x950")
         style = ttk.Style()
         style.theme_use('clam')
