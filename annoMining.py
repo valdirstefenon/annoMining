@@ -25,12 +25,6 @@ from matplotlib.patches import Patch, Circle
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 
-try:
-    import yaml
-    HAS_YAML = True
-except ImportError:
-    HAS_YAML = False
-
 
 SECONDARY_PATHWAYS = {
     'map00900': {'name': 'Terpenoid backbone', 'class': 'Terpenoids', 'color': '#2E86AB'},
@@ -177,14 +171,19 @@ def find_hmm_file(hmm_file, hmm_dir):
             return c
     return None
 
-
 def check_executable(name):
     try:
-        subprocess.run([name, '--version'], capture_output=True, check=True)
-        return True
+        r = subprocess.run([name, '-h'], capture_output=True, text=True, timeout=10)
+        output = (r.stdout or '') + (r.stderr or '')
+        if r.returncode == 0:
+            return True
+        if any(tok in output for tok in ('HMMER', 'Usage', 'hmmsearch', 'hmmscan', 'hmmbuild')):
+            return True
+        return False
+    except FileNotFoundError:
+        return False
     except Exception:
         return False
-
 
 def write_session_info(output_dir):
     import platform
@@ -204,6 +203,38 @@ def write_session_info(output_dir):
 def write_parameters(output_dir, params):
     with open(os.path.join(output_dir, 'parameters.json'), 'w') as f:
         json.dump(params, f, indent=2, default=str)
+
+
+def write_summary(output_dir, filename, header_lines, sections):
+    path = os.path.join(output_dir, filename)
+    with open(path, 'w') as f:
+        f.write("=" * 78 + "\n")
+        f.write(f"annoMining - {filename.replace('_summary.txt','').upper()} SUMMARY\n")
+        f.write("=" * 78 + "\n")
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write("\n")
+        for line in header_lines:
+            f.write(line + "\n")
+        f.write("\n")
+        for title, lines in sections:
+            f.write("-" * 78 + "\n")
+            f.write(f"{title}\n")
+            f.write("-" * 78 + "\n")
+            if isinstance(lines, dict):
+                for k, v in lines.items():
+                    if isinstance(v, list):
+                        f.write(f"{k}: {len(v)} items\n")
+                        for item in v:
+                            f.write(f"  - {item}\n")
+                    else:
+                        f.write(f"{k}: {v}\n")
+            elif isinstance(lines, list):
+                for line in lines:
+                    f.write(f"{line}\n")
+            else:
+                f.write(f"{lines}\n")
+            f.write("\n")
+    return path
 
 
 def parse_eggnog(eggnog_file):
@@ -595,7 +626,7 @@ def calculate_enrichment(group_genes, background_genes, merged_data,
             continue
         fg = cg / total_g
         fb = cb / total_b
-        fold = fg / fb if fb > 0 else np.inf
+        fold = fg / fb if fb > 0 else np.inf        
         if fold < min_fold:
             continue
         table = [[cg, total_g - cg], [cb, total_b - cb]]
@@ -1087,16 +1118,169 @@ def plot_tnj_confidence(merged_data, output_prefix):
 def process_hmmer(gff, genome, hmm_dir, outdir, prefix, domains_dict, pathway_dict,
                   eggnog_data, interpro_data):
     merged = merge_annotations(eggnog_data, interpro_data, pathway_dict)
+    hmmer_stats = {'proteins_extracted': False, 'hmmer_available': False,
+                   'hmm_files_found': 0, 'hmm_files_missing': 0,
+                   'genes_added': 0, 'genes_updated': 0}
     if not (gff and genome):
-        return merged
+        return merged, hmmer_stats
     fasta = os.path.join(outdir, f"{prefix}_proteins.fasta")
     if not extract_proteins_from_gff(gff, genome, fasta):
-        return merged
+        return merged, hmmer_stats
+    hmmer_stats['proteins_extracted'] = True
+    hmmer_stats['hmmer_available'] = check_executable('hmmsearch')
+    if not hmmer_stats['hmmer_available']:
+        return merged, hmmer_stats
+    for dname, info in domains_dict.items():
+        if find_hmm_file(info.get('hmm'), hmm_dir):
+            hmmer_stats['hmm_files_found'] += 1
+        else:
+            hmmer_stats['hmm_files_missing'] += 1
     results = run_hmmer(fasta, hmm_dir, outdir, domains_dict, prefix=prefix)
     if results:
         added, updated = integrate_hmmer(merged, results, pathway_dict)
+        hmmer_stats['genes_added'] = added
+        hmmer_stats['genes_updated'] = updated
         print(f"HMMER: added={added}, updated={updated}")
-    return merged
+    return merged, hmmer_stats
+
+
+def summarize_secondary(merged, hmmer_stats, output_dir):
+    total_genes = len(merged)
+    sec_genes = [g for g, i in merged.items() if i['secondary_pathways']]
+    classes = Counter()
+    for g in sec_genes:
+        for c in merged[g]['secondary_class']:
+            classes[c] += 1
+    pathways = Counter()
+    for g in sec_genes:
+        for p in merged[g]['secondary_pathways']:
+            pathways[p] += 1
+    sources = Counter()
+    for i in merged.values():
+        for s in i['source']:
+            sources[s] += 1
+    header = [
+        f"Output directory: {output_dir}",
+        f"Total genes analyzed: {total_genes}",
+        f"Genes with secondary metabolism annotation: {len(sec_genes)}",
+        f"Percentage: {len(sec_genes) / total_genes * 100:.2f}%" if total_genes else "Percentage: 0%",
+    ]
+    sections = [
+        ("HMMER integration", {
+            'Proteins extracted from GFF': hmmer_stats['proteins_extracted'],
+            'HMMER executable available': hmmer_stats['hmmer_available'],
+            'HMM files found': hmmer_stats['hmm_files_found'],
+            'HMM files missing': hmmer_stats['hmm_files_missing'],
+            'Genes added by HMMER': hmmer_stats['genes_added'],
+            'Genes updated by HMMER': hmmer_stats['genes_updated'],
+        }),
+        ("Annotation sources", dict(sources.most_common())),
+        ("Secondary metabolite classes", dict(classes.most_common())),
+        ("KEGG pathways", {SECONDARY_PATHWAYS.get(p, {}).get('name', p): c for p, c in pathways.most_common()}),
+        ("Top 30 secondary metabolism genes", [
+            f"{g}\t{merged[g]['description'][:80]}\t"
+            f"classes={','.join(merged[g]['secondary_class'])}"
+            for g in sorted(sec_genes,
+                            key=lambda x: len(merged[x]['secondary_pathways']),
+                            reverse=True)[:30]
+        ]),
+    ]
+    return write_summary(output_dir, 'secondary_summary.txt', header, sections)
+
+
+def summarize_pharma(merged, hmmer_stats, output_dir, threshold):
+    total_genes = len(merged)
+    pharma_genes = [g for g, i in merged.items() if i.get('pharma_score', 0) > 0]
+    potentials = Counter(i['pharma_potential'] for i in merged.values() if i.get('pharma_potential') not in (None, 'NONE'))
+    classes = Counter()
+    uses = Counter()
+    for g in pharma_genes:
+        for c in merged[g].get('compound_classes', []):
+            classes[c] += 1
+        for u in merged[g].get('pharma_uses', []):
+            uses[u] += 1
+    top_genes = sorted(pharma_genes, key=lambda x: merged[x]['pharma_score'], reverse=True)[:30]
+    header = [
+        f"Output directory: {output_dir}",
+        f"Threshold used: {threshold}",
+        f"Total genes analyzed: {total_genes}",
+        f"Genes with pharmaceutical potential: {len(pharma_genes)}",
+        f"Percentage: {len(pharma_genes) / total_genes * 100:.2f}%" if total_genes else "Percentage: 0%",
+    ]
+    sections = [
+        ("HMMER integration", {
+            'Proteins extracted from GFF': hmmer_stats['proteins_extracted'],
+            'HMMER executable available': hmmer_stats['hmmer_available'],
+            'HMM files found': hmmer_stats['hmm_files_found'],
+            'HMM files missing': hmmer_stats['hmm_files_missing'],
+            'Genes added by HMMER': hmmer_stats['genes_added'],
+            'Genes updated by HMMER': hmmer_stats['genes_updated'],
+        }),
+        ("Potential distribution", dict(potentials.most_common())),
+        ("Bioactive compound classes", dict(classes.most_common())),
+        ("Predicted pharmaceutical applications", dict(uses.most_common())),
+        ("Top 30 pharmaceutical genes", [
+            f"{g}\t{merged[g]['description'][:80]}\t"
+            f"score={merged[g]['pharma_score']}\t"
+            f"potential={merged[g]['pharma_potential']}\t"
+            f"classes={','.join(merged[g].get('compound_classes', []))}"
+            for g in top_genes
+        ]),
+    ]
+    return write_summary(output_dir, 'pharma_summary.txt', header, sections)
+
+
+def summarize_resistance(merged, hmmer_stats, output_dir, threshold):
+    total_genes = len(merged)
+    res_genes = [g for g, i in merged.items() if i.get('resistance_score', 0) > 0]
+    potentials = Counter(i['resistance_potential'] for i in merged.values() if i.get('resistance_potential') not in (None, 'NONE'))
+    classes = Counter()
+    pathways = Counter()
+    tnj_architectures = Counter()
+    tnj_confidences = Counter()
+    tnj_count = 0
+    for g in res_genes:
+        for c in merged[g].get('resistance_classes', []):
+            classes[c] += 1
+        for p in merged[g].get('resistance_pathways', []):
+            pathways[p] += 1
+        if merged[g].get('tnj_detected', False):
+            tnj_count += 1
+            tnj_architectures[merged[g].get('tnj_architecture', 'Unknown')] += 1
+            tnj_confidences[merged[g].get('tnj_confidence', 'NONE')] += 1
+    top_genes = sorted(res_genes, key=lambda x: merged[x]['resistance_score'], reverse=True)[:30]
+    header = [
+        f"Output directory: {output_dir}",
+        f"Threshold used: {threshold}",
+        f"Total genes analyzed: {total_genes}",
+        f"Genes with resistance potential: {len(res_genes)}",
+        f"Percentage: {len(res_genes) / total_genes * 100:.2f}%" if total_genes else "Percentage: 0%",
+        f"TNJ genes detected: {tnj_count}",
+    ]
+    sections = [
+        ("HMMER integration", {
+            'Proteins extracted from GFF': hmmer_stats['proteins_extracted'],
+            'HMMER executable available': hmmer_stats['hmmer_available'],
+            'HMM files found': hmmer_stats['hmm_files_found'],
+            'HMM files missing': hmmer_stats['hmm_files_missing'],
+            'Genes added by HMMER': hmmer_stats['genes_added'],
+            'Genes updated by HMMER': hmmer_stats['genes_updated'],
+        }),
+        ("Potential distribution", dict(potentials.most_common())),
+        ("Resistance gene classes", dict(classes.most_common())),
+        ("Resistance pathways", {DISEASE_RESISTANCE_PATHWAYS.get(p, {}).get('name', p): c for p, c in pathways.most_common()}),
+        ("TNJ architectures", dict(tnj_architectures.most_common()) if tnj_architectures else "None detected"),
+        ("TNJ confidence levels", dict(tnj_confidences.most_common()) if tnj_confidences else "None detected"),
+        ("Top 30 resistance genes", [
+            f"{g}\t{merged[g]['description'][:80]}\t"
+            f"score={merged[g]['resistance_score']}\t"
+            f"potential={merged[g]['resistance_potential']}\t"
+            f"classes={','.join(merged[g].get('resistance_classes', []))}"
+            + (f"\tTNJ={merged[g]['tnj_architecture']}" if merged[g].get('tnj_detected') else "")
+            for g in top_genes
+        ]),
+    ]
+    return write_summary(output_dir, 'resistance_summary.txt', header, sections)
 
 
 def run_secondary_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_dir, output_dir):
@@ -1104,17 +1288,18 @@ def run_secondary_analysis(eggnog_file, interpro_file, gff_file, genome_file, hm
     write_session_info(output_dir)
     write_parameters(output_dir, {'eggnog': eggnog_file, 'interpro': interpro_file,
                                   'gff': gff_file, 'genome': genome_file, 'hmm_dir': hmm_dir})
-    eggnog_data = parse_eggnog(eggnog_file) if eggnog_file else parse_eggnog(None)
-    interpro_data = parse_interpro(interpro_file) if interpro_file else parse_interpro(None)
-    merged = process_hmmer(gff_file, genome_file, hmm_dir, output_dir, 'secondary',
-                           SECONDARY_HMM, SECONDARY_PATHWAYS, eggnog_data, interpro_data)
+    eggnog_data = parse_eggnog(eggnog_file)
+    interpro_data = parse_interpro(interpro_file)
+    merged, hmmer_stats = process_hmmer(gff_file, genome_file, hmm_dir, output_dir, 'secondary',
+                                        SECONDARY_HMM, SECONDARY_PATHWAYS, eggnog_data, interpro_data)
     prefix = os.path.join(output_dir, 'secondary')
     plot_ko_dotplot(merged, prefix)
     plot_pathway_completeness(merged, prefix)
     plot_class_distribution(merged, prefix)
     plot_top_ec(merged, prefix)
     plot_top_pfam(merged, prefix)
-    print(f"Secondary analysis: {len(merged)} genes processed")
+    summary_path = summarize_secondary(merged, hmmer_stats, output_dir)
+    print(f"Secondary analysis: {len(merged)} genes, summary: {summary_path}")
 
 
 def run_pharma_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_dir, output_dir,
@@ -1125,10 +1310,10 @@ def run_pharma_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_d
                                   'gff': gff_file, 'genome': genome_file, 'hmm_dir': hmm_dir,
                                   'threshold': threshold, 'network_nodes': network_nodes,
                                   'network_method': network_method})
-    eggnog_data = parse_eggnog(eggnog_file) if eggnog_file else parse_eggnog(None)
-    interpro_data = parse_interpro(interpro_file) if interpro_file else parse_interpro(None)
-    merged = process_hmmer(gff_file, genome_file, hmm_dir, output_dir, 'pharma',
-                           SECONDARY_HMM, SECONDARY_PATHWAYS, eggnog_data, interpro_data)
+    eggnog_data = parse_eggnog(eggnog_file)
+    interpro_data = parse_interpro(interpro_file)
+    merged, hmmer_stats = process_hmmer(gff_file, genome_file, hmm_dir, output_dir, 'pharma',
+                                        SECONDARY_HMM, SECONDARY_PATHWAYS, eggnog_data, interpro_data)
     calculate_pharma_score(merged, threshold)
     prefix = os.path.join(output_dir, 'pharma')
     plot_score_ranking(merged, 'pharma_score', 'pharma_potential', prefix, 'Pharmaceutical Potential Score')
@@ -1143,22 +1328,36 @@ def run_pharma_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_d
                      prefix, 'Functional Network of Pharmaceutical Genes')
     high_med = [g for g, i in merged.items() if i.get('pharma_potential') in ('HIGH', 'MEDIUM')]
     low_none = [g for g, i in merged.items() if i.get('pharma_potential') in ('LOW', 'NONE')]
+    enrichment_df = None
     if len(high_med) >= 2 and len(low_none) >= 2:
-        df = calculate_enrichment(high_med, low_none, merged, min_count=3)
-        if len(df) > 0:
+        enrichment_df = calculate_enrichment(high_med, low_none, merged, min_count=3)
+        if len(enrichment_df) > 0:
             def categorize(pfam):
                 for cat, pfams in CORE_PHARMA_DOMAINS.items():
                     if pfam in pfams:
                         return cat
                 return 'Other'
-            df['pathway_category'] = df['pfam_domain'].apply(categorize)
+            enrichment_df['pathway_category'] = enrichment_df['pfam_domain'].apply(categorize)
             cat_colors = {'Flavonoids': '#E76F51', 'Terpenoids': '#2A9D8F',
                           'Alkaloids': '#E63946', 'Phenylpropanoids': '#E9C46A',
                           'Carotenoids': '#F4A261', 'P450': '#9B5DE5',
                           'Methyltransferases': '#F15BB5'}
-            plot_enrichment_dotplot(df, prefix, 'Enriched PFAMs in HIGH+MEDIUM Pharma Genes',
+            plot_enrichment_dotplot(enrichment_df, prefix,
+                                    'Enriched PFAMs in HIGH+MEDIUM Pharma Genes',
                                     'pathway_category', cat_colors)
-    print(f"Pharma analysis: {len(merged)} genes processed")
+    summary_path = summarize_pharma(merged, hmmer_stats, output_dir, threshold)
+    if enrichment_df is not None and len(enrichment_df) > 0:
+        with open(summary_path, 'a') as f:
+            f.write("\n" + "-" * 78 + "\n")
+            f.write("PFAM enrichment (HIGH+MEDIUM vs LOW+NONE)\n")
+            f.write("-" * 78 + "\n")
+            sig = enrichment_df[enrichment_df['significant']]
+            f.write(f"Significant PFAMs (FDR < 0.05): {len(sig)}\n")
+            for _, row in sig.sort_values('fold_enrichment', ascending=False).head(20).iterrows():
+                f.write(f"  {row['pfam_domain']}\tfold={row['fold_enrichment']}\t"
+                        f"count_group={row['count_in_group']}\t"
+                        f"p_adj={row['p_adjust']:.2e}\n")
+    print(f"Pharma analysis: {len(merged)} genes, summary: {summary_path}")
 
 
 def run_resistance_analysis(eggnog_file, interpro_file, gff_file, genome_file, hmm_dir, output_dir,
@@ -1169,10 +1368,10 @@ def run_resistance_analysis(eggnog_file, interpro_file, gff_file, genome_file, h
                                   'gff': gff_file, 'genome': genome_file, 'hmm_dir': hmm_dir,
                                   'threshold': threshold, 'network_nodes': network_nodes,
                                   'network_method': network_method})
-    eggnog_data = parse_eggnog(eggnog_file) if eggnog_file else parse_eggnog(None)
-    interpro_data = parse_interpro(interpro_file) if interpro_file else parse_interpro(None)
-    merged = process_hmmer(gff_file, genome_file, hmm_dir, output_dir, 'resistance',
-                           RESISTANCE_HMM, SECONDARY_PATHWAYS, eggnog_data, interpro_data)
+    eggnog_data = parse_eggnog(eggnog_file)
+    interpro_data = parse_interpro(interpro_file)
+    merged, hmmer_stats = process_hmmer(gff_file, genome_file, hmm_dir, output_dir, 'resistance',
+                                        RESISTANCE_HMM, SECONDARY_PATHWAYS, eggnog_data, interpro_data)
     calculate_resistance_score(merged, threshold)
     prefix = os.path.join(output_dir, 'resistance')
     plot_score_ranking(merged, 'resistance_score', 'resistance_potential', prefix, 'Disease Resistance Score')
@@ -1189,26 +1388,51 @@ def run_resistance_analysis(eggnog_file, interpro_file, gff_file, genome_file, h
                      prefix, 'Functional Network of Disease Resistance Genes', tnj_key='tnj_detected')
     high_med = [g for g, i in merged.items() if i.get('resistance_potential') in ('HIGH', 'MEDIUM')]
     low_none = [g for g, i in merged.items() if i.get('resistance_potential') in ('LOW', 'NONE')]
+    enrichment_df = None
     if len(high_med) >= 2 and len(low_none) >= 2:
-        df = calculate_enrichment(high_med, low_none, merged, min_count=3)
-        if len(df) > 0:
+        enrichment_df = calculate_enrichment(high_med, low_none, merged, min_count=3)
+        if len(enrichment_df) > 0:
             def categorize(pfam):
                 for cat, info in DISEASE_RESISTANCE_PFAMS.items():
                     if pfam in info['pfams']:
                         return cat
                 return 'Other'
-            df['pathway_category'] = df['pfam_domain'].apply(categorize)
+            enrichment_df['pathway_category'] = enrichment_df['pfam_domain'].apply(categorize)
             colors = {c: info['color'] for c, info in DISEASE_RESISTANCE_PFAMS.items()}
-            plot_enrichment_dotplot(df, prefix, 'Enriched PFAMs in HIGH+MEDIUM Resistance Genes',
+            plot_enrichment_dotplot(enrichment_df, prefix,
+                                    'Enriched PFAMs in HIGH+MEDIUM Resistance Genes',
                                     'pathway_category', colors)
-    print(f"Resistance analysis: {len(merged)} genes processed")
+    summary_path = summarize_resistance(merged, hmmer_stats, output_dir, threshold)
+    if enrichment_df is not None and len(enrichment_df) > 0:
+        with open(summary_path, 'a') as f:
+            f.write("\n" + "-" * 78 + "\n")
+            f.write("PFAM enrichment (HIGH+MEDIUM vs LOW+NONE)\n")
+            f.write("-" * 78 + "\n")
+            sig = enrichment_df[enrichment_df['significant']]
+            f.write(f"Significant PFAMs (FDR < 0.05): {len(sig)}\n")
+            for _, row in sig.sort_values('fold_enrichment', ascending=False).head(20).iterrows():
+                f.write(f"  {row['pfam_domain']}\tfold={row['fold_enrichment']}\t"
+                        f"count_group={row['count_in_group']}\t"
+                        f"p_adj={row['p_adjust']:.2e}\n")
+    print(f"Resistance analysis: {len(merged)} genes, summary: {summary_path}")
 
 
 def run_eggnog2kegg(eggnog_file, output_file, output_dir):
     ensure_dir(output_dir)
     path = os.path.join(output_dir, output_file)
     total, with_ko = parse_eggnog_kegg_mapper(eggnog_file, path)
-    print(f"Total: {total}, with KO: {with_ko} ({with_ko / total * 100:.2f}%)")
+    header = [
+        f"Output directory: {output_dir}",
+        f"Input file: {eggnog_file}",
+        f"Output file: {path}",
+        f"Total genes: {total}",
+        f"Genes with KO: {with_ko}",
+        f"Percentage with KO: {with_ko / total * 100:.2f}%" if total else "Percentage with KO: 0%",
+    ]
+    write_summary(output_dir, 'eggnog2kegg_summary.txt', header,
+                  [("Conversion result", {'Total genes': total, 'Genes with KO': with_ko,
+                                          'Output file': path})])
+    print(f"eggnog2kegg: {total} genes, {with_ko} with KO, summary saved")
 
 
 class App:
